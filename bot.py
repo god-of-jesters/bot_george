@@ -1,4 +1,6 @@
 import asyncio
+import os
+from dotenv import load_dotenv
 
 from aiogram.filters.callback_data import CallbackData
 from aiogram import Bot, Dispatcher, Router
@@ -12,14 +14,15 @@ from database import *
 from repo.user_repo import *
 from repo.file_repo import *
 
-from entityes.registration import Reg
+from entityes.sequence import Reg
 
 from keyboards import get_registration_keyboard
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
-API_TOKEN = open("API.txt", "r", encoding="utf-8").read().strip()
+load_dotenv()
+API_TOKEN = os.getenv("BOT")
 active_sessions = {}
 registration = {}
 router = Router()
