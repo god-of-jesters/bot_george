@@ -62,7 +62,7 @@ def get_main_menu_admins_keyboard():
     keyboard.button(text="Профиль", callback_data="profile")
     keyboard.button(text="Комантные обращения", callback_data="manage_rooms")
     keyboard.button(text="Рассылка", callback_data="mailing")
-    keyboard.button(text="Жуурнал действий", callback_data="activity_log")
+    keyboard.button(text="Журнал действий", callback_data="activity_log")
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
     keyboard.button(text="Помощь", callback_data="help")
     keyboard.adjust(2)

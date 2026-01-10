@@ -73,7 +73,7 @@ async def process_job_title_callback(callback_query, state: FSMContext):
     else:
         await callback_query.message.answer("Неверный выбор должности. Пожалуйста, выберите вашу должность еще раз.", reply_markup=get_job_title_keyboard()) 
 
-@router.callback_query(MainMenu.main_menu)
+@router.callback_query(MainMenu.main_menu_student)
 async def show_profile(callback_query: Message, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
@@ -92,6 +92,103 @@ async def show_profile(callback_query: Message, state: FSMContext):
         case "complaint":
             await callback_query.message.answer("На что будет жалоба.", reply_markup=get_complaint_keyboard())
             await state.set_state(MainMenu.complaint)
+
+@router.callback_query(MainMenu.main_menu_organizer)
+async def show_profile_organizer(callback_query: Message, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Организатор":
+        return
+
+    match data:
+        case "profile":
+            await callback_query.message.answer("Профиль организатора.", reply_markup=get_profile_keyboard())
+            await state.set_state(MainMenu.profile)
+
+        case "complaint":
+            await callback_query.message.answer("Подать жалобу.", reply_markup=get_complaint_keyboard())
+            await state.set_state(MainMenu.complaint)
+
+        case "view_complaints":
+            await callback_query.message.answer("Жалобы в работе.\n(Здесь будет очередь обращений.)")
+
+        case "contact":
+            await callback_query.message.answer("Сообщить/Обратиться.\n(Здесь будет форма сообщения.)")
+
+        case "mailing":
+            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
+
+        case "help":
+            await callback_query.message.answer("Помощь.\n(Здесь будет справка для организаторов.)")
+
+        case _:
+            await callback_query.message.answer("Команда не распознана.")
+
+@router.callback_query(MainMenu.main_menu_rpg_organizer)
+async def show_profile_rpg_organizer(callback_query: Message, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "РПГ-организаторы":
+        return
+
+    match data:
+        case "profile":
+            await callback_query.message.answer("Профиль РПГ-организатора.", reply_markup=get_profile_keyboard())
+            await state.set_state(MainMenu.profile)
+
+        case "shop":
+            await callback_query.message.answer("Магазин.\n(Здесь будет магазин для РПГ-организаторов.)")
+
+        case "operations_with_participants":
+            await callback_query.message.answer("Операции с участниками.\n(Здесь будут операции с участниками.)")
+
+        case "operation_history":
+            await callback_query.message.answer("История операций.\n(Здесь будет история операций.)")
+
+        case "mailing":
+            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
+
+        case "contact":
+            await callback_query.message.answer("Сообщить/Обратиться.\n(Здесь будет форма сообщения.)")
+
+        case "help":
+            await callback_query.message.answer("Помощь.\n(Здесь будет справка для РПГ-организаторов.)")
+
+        case _:
+            await callback_query.message.answer("Команда не распознана.")
+
+@router.callback_query(MainMenu.main_menu_admins)
+async def show_profile_admins(callback_query: Message, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Администраторы по комнатам":
+        return
+
+    match data:
+        case "profile":
+            await callback_query.message.answer("Профиль администратора по комнатам.", reply_markup=get_profile_keyboard())
+            await state.set_state(MainMenu.profile)
+
+        case "manage_rooms":
+            await callback_query.message.answer("Комнатные обращения.\n(Здесь будет модуль управления комнатами.)")
+
+        case "mailing":
+            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
+
+        case "activity_log":
+            await callback_query.message.answer("Журнал действий.\n(Здесь будет журнал действий.)")
+
+        case "contact":
+            await callback_query.message.answer("Сообщить/Обратиться.\n(Здесь будет форма сообщения.)")
+
+        case "help":
+            await callback_query.message.answer("Помощь.\n(Здесь будет справка для администраторов по комнатам.)")
+
+        case _:
+            await callback_query.message.answer("Команда не распознана.")
 
 @router.callback_query(MainMenu.complaint)
 async def process_complaint_callback(callback_query: Message, state: FSMContext):
@@ -208,25 +305,25 @@ async def start_handler(message: Message, state: FSMContext):
         match active_sessions[user_id].role:
             case "Участник":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_student)
             case "Организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_organizer)
             case "РПГ-организаторы":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_rpg_organizer)
             case "Администраторы по комнатам":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_admins_keyboard())
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_admins)
             case "Команда рейтинга":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_rating_team)
             case "Команда медиа":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_media_team)
             case "Главный организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_chief_organizer)
 
 async def main():
     bot = Bot(token=API_TOKEN)
