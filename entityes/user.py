@@ -7,16 +7,16 @@ class User:
         self.fio = fio
         self.team_number = team_number
         self.role = role
-        self.num_badge = num_badge
+        self.badge_number = num_badge
         self.reiting = reiting
         self.balance = balance
         self.date_registered = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-    def set_user_info(self, fio: str = None, team_number: int = None, role: str = None, num_badge: int = None, date_registered: str = None):
+
+    def set_user_info(self, fio: str = None, team_number: int = None, role: str = None, badge_number: int = None, date_registered: str = None):
         self.fio = fio
         self.team_number = team_number
         self.role = role
-        self.num_badge = num_badge
+        self.badge_number = badge_number
         self.date_registered = date_registered
 
 @dataclass

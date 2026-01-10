@@ -7,7 +7,7 @@ async def add_user(user: User):
         await db.execute("""
         INSERT OR IGNORE INTO users (tg_id, fio, role, team_number, num_badge, reiting, balance, date_registered)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-        """, (user.user_id, user.fio, user.role, user.team_number, user.num_badge, user.reiting, user.balance, user.date_registered))
+        """, (user.user_id, user.fio, user.role, user.team_number, user.badge_number, user.reiting, user.balance, user.date_registered))
         await db.commit()
 
 async def get_user(tg_id: int) -> User | None:
@@ -37,5 +37,5 @@ async def get_user_by_badge(badge_number: int) -> User | None:
         cursor = await db.execute("SELECT tg_id, fio, team_number, role, num_badge, reiting, balance, date_registered FROM users WHERE num_badge = ?;", (badge_number,))
         row = await cursor.fetchone()
         if row:
-            return User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], num_badge=row[4], reiting=row[5], balance=row[6], date_registered=row[7])
+            return User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], num_badge=row[4], reiting=row[5], balance=row[6])
         return None

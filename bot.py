@@ -25,7 +25,13 @@ API_TOKEN = os.getenv("BOT")
 active_sessions = {}
 registration = {}
 router = Router()
-teams = {team.team_number: team for team in get_all_teams()}
+teams = {}
+
+async def get_teams() -> list:
+    team_list = await get_all_teams()
+    team_dict = {team.team_number: team for team in team_list}
+    teams.update(team_dict)
+
 
 @router.callback_query(Reg.waiting_for_job_title)
 async def process_job_title_callback(callback_query, state: FSMContext):
@@ -53,6 +59,26 @@ async def process_job_title_callback(callback_query, state: FSMContext):
     else:
         await callback_query.message.answer("Неверный выбор должности. Пожалуйста, выберите вашу должность еще раз.", reply_markup=get_job_title_keyboard()) 
 
+@router.callback_query(MainMenu.main_menu)
+async def show_profile(callback_query: Message, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    match data:
+        case "profile":
+            profile = "Профиль:\n"
+            profile += f"ФИО: {active_sessions[user_id].fio}\n Роль: {active_sessions[user_id].role}\n"
+            profile += f"Номер бейджа: {active_sessions[user_id].num_badge}\n"
+            if active_sessions[user_id].role == "Участник":
+                profile += f"Название команды: {teams[active_sessions[user_id].team_number].team_name}\n" if active_sessions[user_id].team_number in teams else "Не назначена команда\n"
+            profile += f"Рейтинг: {active_sessions[user_id].reiting}\n"
+            profile += f"Рейтинг команды: {teams[active_sessions[user_id].team_number].reiting}\n" if active_sessions[user_id].team_number in teams else ""
+            profile += f"Баланс: {active_sessions[user_id].balance} очков\n"
+            await callback_query.message.answer(profile, reply_markup=get_profile_keyboard())
+            await state.set_state(MainMenu.profile)
+        case "complaint":
+            await callback_query.message.answer("Вы подали жалобу.", reply_markup=get_main_menu_student_keyboard())
+            await state.set_state(MainMenu.complaint)
+
 @router.message(Command("teg"))
 async def cmd_teg(message: Message):
     id = message.from_user.id
@@ -66,12 +92,11 @@ async def process_badge_number(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Номер бейджа должен быть числом. Пожалуйста, введите номер бейджа еще раз.")
         return
+    existing_user = await get_user_by_badge(badge_number)
+    if not existing_user:
+        await message.answer("Такого пользователя нет. Введите номер бейджа еще раз.")
+        return
     
-    with get_user_by_badge(registration[user_id].badge_number) as existing_user:
-        if not existing_user:
-            await message.answer("Такого пользователя нет. Введите номер бейджа еще раз.")
-            return
-        
     registration[user_id].badge_number = int(message.text)
 
     await message.answer("Введите ФИО, все с большой буквы в именительном падеже.")
@@ -82,12 +107,12 @@ async def process_fio(message: Message, state: FSMContext):
     user_id = message.from_user.id
     registration[user_id].fio = message.text
 
-    with get_user_by_badge(registration[user_id].badge_number) as existing_user:
-        if existing_user:
-            if existing_user.fio != registration[user_id].fio:
-                await message.answer("Пользователь с таким номером бейджа уже зарегистрирован с другим ФИО. Пожалуйста, проверьте введенные данные.")
-                await state.set_state(Reg.waiting_for_bage_number)
-                return
+    existing_user = await get_user_by_badge(registration[user_id].badge_number)
+    if existing_user:
+        if existing_user.fio != registration[user_id].fio:
+            await message.answer("Пользователь с таким номером бейджа уже зарегистрирован с другим ФИО. Пожалуйста, проверьте введенные данные.")
+            await state.set_state(Reg.waiting_for_bage_number)
+            return
     
     if registration[user_id].badge_number >= 100 and registration[user_id].badge_number < 1000:
         registration[user_id].role = "Участник"
@@ -123,26 +148,24 @@ async def start_handler(message: Message, state: FSMContext):
     user_id = message.from_user.id
 
     if not active_sessions.get(user_id):
-        registration[user_id] = User(user_id=user_id, tg_id=user_id)
+        registration[user_id] = User(user_id=user_id)
         await message.answer(
             "Приветствую! Для начала надо пройти регистрацию.\n"
             "Введите ваш номер бейджа.",
         )
         await state.set_state(Reg.waiting_for_bage_number)
     else:
-        if active_sessions[user_id].role == "Участник":
-            await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
-            await state.set_state(MainMenu.main_menu)
-        elif
-        profile = "Профиль:\n" \
-        f"ФИО: {registration[user_id].fio}\n Роль: {registration[user_id].role}\n" \
-        f"Номер бейджа: {registration[user_id].num_badge}\n"
-        if registration[user_id].role == "Участник":
-            main_menu += f"Название команды: {teams[registration[user_id].team_number].team_name}\n" if registration[user_id].team_number in teams else "Не назначена команда\n"
-            main_menu += f"Рейтинг: {registration[user_id].reiting}\n"
-            main_menu += f"Рейтинг команды: {teams[registration[user_id].team_number].reiting}\n" if registration[user_id].team_number in teams else ""
-            main_menu += f"Баланс: {registration[user_id].balance} очков\n"
-            await message.answer(main_menu, reply_markup=get_registration_keyboard())
+        match active_sessions[user_id].role:
+            case "Участник":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
+                await state.set_state(MainMenu.main_menu)
+            case "Организатор":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
+                await state.set_state(MainMenu.main_menu)
+            case "Рейтинг Команды":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
+                await state.set_state(MainMenu.main_menu)
+
 
 async def main():
     bot = Bot(token=API_TOKEN)
@@ -152,6 +175,7 @@ async def main():
     dp.include_router(router)
 
     await init_db()
+    await get_teams()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
