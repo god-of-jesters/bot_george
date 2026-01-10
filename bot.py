@@ -162,10 +162,21 @@ async def start_handler(message: Message, state: FSMContext):
             case "Организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
                 await state.set_state(MainMenu.main_menu)
-            case "Рейтинг Команды":
+            case "РПГ-организаторы":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
+                await state.set_state(MainMenu.main_menu)
+            case "Администраторы по комнатам":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_admins_keyboard())
+                await state.set_state(MainMenu.main_menu)
+            case "Команда рейтинга":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
                 await state.set_state(MainMenu.main_menu)
-
+            case "Команда медиа":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
+                await state.set_state(MainMenu.main_menu)
+            case "Главный организатор":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
+                await state.set_state(MainMenu.main_menu)
 
 async def main():
     bot = Bot(token=API_TOKEN)
