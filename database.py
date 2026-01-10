@@ -1,5 +1,8 @@
 import aiosqlite
-from entityes import User, File, Team, Complaint
+from entityes.user import User
+from entityes.file import File
+from entityes.team import Team
+from entityes.complaint import Complaint
 
 DB_PATH = "georg.db"
 USERS = {}
@@ -42,7 +45,7 @@ async def init_db():
         await db.execute("""
         CREATE TABLE IF NOT EXISTS teams (
             team_number INTEGER PRIMARY KEY,
-            team_name TEXT NOT NULL,
+            team_name TEXT NOT NULL, 
             reiting INTEGER NOT NULL DEFAULT 0
         );
         """)
@@ -70,7 +73,7 @@ async def load_datastore():
         cursor = await db.execute("SELECT tg_id, fio, team_number, role, num_badge, reiting, balance, date_registered FROM users;")
         rows = await cursor.fetchall()
         for row in rows:
-            user = User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], num_badge=row[4], reiting=row[5], balance=row[6], date_registered=row[7])
+            user = User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], badge_number=row[4], reiting=row[5], balance=row[6])
             USERS[user.user_id] = user
 
         # Load files
@@ -81,10 +84,10 @@ async def load_datastore():
             FILES[file.id] = file
 
         # Load teams
-        cursor = await db.execute("SELECT team_number, team_name, reiting FROM teams;")
+        cursor = await db.execute("SELECT team_number, team_name FROM teams;")
         rows = await cursor.fetchall()
         for row in rows:
-            team = Team(team_number=row[0], team_name=row[1], reiting=row[2])
+            team = Team(team_number=row[0], team_name=row[1])
             TEAMS[team.team_number] = team
 
         # Load complaints

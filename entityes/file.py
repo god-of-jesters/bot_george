@@ -1,7 +1,7 @@
 from datetime import datetime
 
 class File:
-    def __init__(self, id: str, tg_id: str, tg_file_id: int, file_name: str, mime_type: str, file_size: int, file_path: str, date_created: str = None):
+    def __init__(self, id: str, tg_id: str, tg_file_id: int, file_name: str, mime_type: str, file_size: int, file_path: str):
         self.file_id = id
         self.file_tg_id = tg_id
         self.file_tg_file_id = tg_file_id

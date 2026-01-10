@@ -12,7 +12,7 @@ from database import load_datastore, USERS, TEAMS, FILES, COMPLAINTS
 from repo.team_repo import *
 from repo.user_repo import *
 from repo.file_repo import *
-from repo.complait_repo import *
+from repo.complaint_repo import *
 from entityes.sequence import *
 
 from keyboards import *
@@ -26,6 +26,26 @@ active_sessions = {}
 registration = {}
 complaintes = {}
 router = Router()
+
+@router.message(MainMenu.profile)
+async def main_menu_callback(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    match active_sessions[user_id].role:
+            case "Участник":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
+            case "Организатор":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
+            case "РПГ-организаторы":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
+            case "Администраторы по комнатам":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_admins_keyboard())
+            case "Команда рейтинга":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
+            case "Команда медиа":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
+            case "Главный организатор":
+                await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
+    await state.set_state(MainMenu.main_menu)
 
 @router.callback_query(Reg.waiting_for_job_title)
 async def process_job_title_callback(callback_query, state: FSMContext):
@@ -61,11 +81,11 @@ async def show_profile(callback_query: Message, state: FSMContext):
         case "profile":
             profile = "Профиль:\n"
             profile += f"ФИО: {active_sessions[user_id].fio}\n Роль: {active_sessions[user_id].role}\n"
-            profile += f"Номер бейджа: {active_sessions[user_id].num_badge}\n"
+            profile += f"Номер бейджа: {active_sessions[user_id].badge_number}\n"
             if active_sessions[user_id].role == "Участник":
-                profile += f"Название команды: {teams[active_sessions[user_id].team_number].team_name}\n" if active_sessions[user_id].team_number in teams else "Не назначена команда\n"
+                profile += f"Название команды: {TEAMS[active_sessions[user_id].team_number].team_name}\n" if active_sessions[user_id].team_number in TEAMS else "Не назначена команда\n"
                 profile += f"Рейтинг: {active_sessions[user_id].reiting}\n"
-                profile += f"Рейтинг команды: {teams[active_sessions[user_id].team_number].reiting}\n" if active_sessions[user_id].team_number in teams else ""
+                profile += f"Рейтинг команды: {TEAMS[active_sessions[user_id].team_number].reiting}\n" if active_sessions[user_id].team_number in TEAMS else ""
                 profile += f"Баланс: {active_sessions[user_id].balance} очков\n"
                 await callback_query.message.answer(profile, reply_markup=get_profile_keyboard())
                 await state.set_state(MainMenu.profile)
@@ -80,7 +100,7 @@ async def process_complaint_callback(callback_query: Message, state: FSMContext)
     if user_id not in complaintes:
         complaintes[user_id] = Complaint(user_id=user_id, adresat=data, status="Новая")
     await callback_query.message.answer("Выберете категорию жалобы.", reply_markup=get_complaint_category_keyboard())
-    await state.set_state(ComplaintProcess.waiting_for_complaint_text)
+    await state.set_state(ComplaintProcess.waiting_for_complaint_category)
 
 @router.callback_query(ComplaintProcess.waiting_for_complaint_category)
 async def process_complaint_category_callback(callback_query: Message, state: FSMContext):
@@ -161,17 +181,18 @@ async def process_team_number(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Номер команды должен быть числом. Пожалуйста, введите номер команды еще раз.")
         return
-    if team_number not in teams:
+    if team_number not in TEAMS:
         await message.answer("Такой команды нет. Введите номер команды еще раз.")
         return
-    
+    registration[user_id].team_number = team_number
     await add_user(registration[user_id])
 
     active_sessions[user_id] = registration[user_id]
     del registration[user_id]
 
     await message.answer("Регистрация завершена! Спасибо.")
-    await state.clear()
+    await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
+    await state.set_state(MainMenu.main_menu)
 
 async def start_handler(message: Message, state: FSMContext):
     user_id = message.from_user.id

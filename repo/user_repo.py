@@ -45,5 +45,5 @@ async def get_user_by_badge(badge_number: int) -> User | None:
         cursor = await db.execute("SELECT tg_id, fio, team_number, role, num_badge, reiting, balance, date_registered FROM users WHERE num_badge = ?;", (badge_number,))
         row = await cursor.fetchone()
         if row:
-            return User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], num_badge=row[4], reiting=row[5], balance=row[6])
+            return User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], badge_number=row[4], reiting=row[5], balance=row[6])
         return None

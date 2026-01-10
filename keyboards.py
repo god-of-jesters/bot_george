@@ -25,12 +25,12 @@ def get_main_menu_student_keyboard():
     keyboard.button(text="Магазин", callback_data="shop")
     keyboard.button(text="Задать вопрос", callback_data="ask_question")
     keyboard.button(text="Помощь", callback_data="help")
-    keyboard.adjust(1)
+    keyboard.adjust(2)
     return keyboard.as_markup()
 
 def get_profile_keyboard():
     keyboard = ReplyKeyboardBuilder()
-    keyboard.button(text="Главное меню")
+    keyboard.button(text="Главное меню", callback_data="main_menu")
     keyboard.adjust(1)
     return keyboard.as_markup(resize_keyboard=True)
 
@@ -78,7 +78,7 @@ def get_main_menu_rating_team_keyboard():
     keyboard.button(text="Рассылка", callback_data="mailing")
     keyboard.button(text="Безопастность", callback_data="security")
     keyboard.button(text="Помощь", callback_data="help")
-    keyboard.adjust(1)
+    keyboard.adjust(2)
     return keyboard.as_markup()
 
 def get_main_menu_chief_organizer_keyboard():

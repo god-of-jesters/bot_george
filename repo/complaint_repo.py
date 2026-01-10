@@ -1,6 +1,6 @@
 from database import DB_PATH, COMPLAINTS
 import aiosqlite
-from entityes.complait import Complaint
+from entityes.complaint import Complaint
 
 async def add_complaint(complaint: Complaint):
     async with aiosqlite.connect(DB_PATH) as db:
