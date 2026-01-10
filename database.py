@@ -1,8 +1,12 @@
 import aiosqlite
-from entityes.user import User
-from entityes.file import File
+from entityes import User, File, Team, Complaint
 
 DB_PATH = "georg.db"
+USERS = {}
+FILES = {}
+TEAMS = {}
+COMPLAINTS = {}
+
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("PRAGMA journal_mode=WAL;")      # лучше для конкуренции
@@ -47,12 +51,45 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS complaints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            title TEXT NOT NULL,
+            adresat TEXT NOT NULL,
             description TEXT,
             date_created TEXT NOT NULL DEFAULT (datetime('now')),
+            date_resolved TEXT,
             status TEXT NOT NULL DEFAULT 'open',
+            execution TEXT,
             FOREIGN KEY (user_id) REFERENCES users(tg_id) ON DELETE CASCADE
         );
         """)
 
         await db.commit()
+
+async def load_datastore():
+    await init_db()
+    async with aiosqlite.connect(DB_PATH) as db:
+        # Load users
+        cursor = await db.execute("SELECT tg_id, fio, team_number, role, num_badge, reiting, balance, date_registered FROM users;")
+        rows = await cursor.fetchall()
+        for row in rows:
+            user = User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], num_badge=row[4], reiting=row[5], balance=row[6], date_registered=row[7])
+            USERS[user.user_id] = user
+
+        # Load files
+        cursor = await db.execute("SELECT id, tg_id, tg_file_id, file_name, mime_type, file_size, created_at FROM files;")
+        rows = await cursor.fetchall()
+        for row in rows:
+            file = File(id=row[0], tg_id=row[1], tg_file_id=row[2], file_name=row[3], mime_type=row[4], file_size=row[5], date_created=row[6])
+            FILES[file.id] = file
+
+        # Load teams
+        cursor = await db.execute("SELECT team_number, team_name, reiting FROM teams;")
+        rows = await cursor.fetchall()
+        for row in rows:
+            team = Team(team_number=row[0], team_name=row[1], reiting=row[2])
+            TEAMS[team.team_number] = team
+
+        # Load complaints
+        cursor = await db.execute("SELECT id, user_id, adresat, description, date_created, date_resolved, status, execution FROM complaints;")
+        rows = await cursor.fetchall()
+        for row in rows:
+            complaint = Complaint(complaint_id=row[0], user_id=row[1], adresat=row[2], description=row[3], date_created=row[4], date_resolved=row[5], status=row[6], execution=row[7])
+            COMPLAINTS[complaint.complaint_id] = complaint

@@ -104,3 +104,21 @@ def get_main_menu_media_team_keyboard():
     keyboard.button(text="Помощь", callback_data="help")
     keyboard.adjust(2)
     return keyboard.as_markup()
+
+def get_complaint_keyboard():
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="На участника", callback_data="participant_behavior")
+    keyboard.button(text="На организатора", callback_data="organizer_behavior")
+    keyboard.button(text="На комнату", callback_data="room_issue")
+    keyboard.button(text="На персонал базы", callback_data="other")
+    keyboard.adjust(2)
+    return keyboard.as_markup()
+
+def get_complaint_category_keyboard():
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="Срочно!", callback_data="alert")
+    keyboard.button(text="В ближайщее время", callback_data="soon")
+    keyboard.button(text="Жалоба на комнату", callback_data="room_problems")
+    keyboard.button(text="Иное", callback_data="other_issues")
+    keyboard.adjust(2)
+    return keyboard.as_markup()

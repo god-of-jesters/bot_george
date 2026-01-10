@@ -9,7 +9,10 @@ class Reg(StatesGroup):
 class MainMenu(StatesGroup):
     main_menu = State()
     profile = State()
+    complaint = State()
 
 class ComplaintProcess(StatesGroup):
     waiting_for_complaint_text = State()
+    waiting_for_complaint_category = State()
+    waiting_for_complaint_files = State()
     waiting_for_complaint_confirmation = State()

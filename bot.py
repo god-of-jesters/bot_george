@@ -8,11 +8,11 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 
-from database import *
+from database import load_datastore, USERS, TEAMS, FILES, COMPLAINTS
 from repo.team_repo import *
 from repo.user_repo import *
 from repo.file_repo import *
-
+from repo.complait_repo import *
 from entityes.sequence import *
 
 from keyboards import *
@@ -24,14 +24,8 @@ load_dotenv()
 API_TOKEN = os.getenv("BOT")
 active_sessions = {}
 registration = {}
+complaintes = {}
 router = Router()
-teams = {}
-
-async def get_teams() -> list:
-    team_list = await get_all_teams()
-    team_dict = {team.team_number: team for team in team_list}
-    teams.update(team_dict)
-
 
 @router.callback_query(Reg.waiting_for_job_title)
 async def process_job_title_callback(callback_query, state: FSMContext):
@@ -70,19 +64,55 @@ async def show_profile(callback_query: Message, state: FSMContext):
             profile += f"Номер бейджа: {active_sessions[user_id].num_badge}\n"
             if active_sessions[user_id].role == "Участник":
                 profile += f"Название команды: {teams[active_sessions[user_id].team_number].team_name}\n" if active_sessions[user_id].team_number in teams else "Не назначена команда\n"
-            profile += f"Рейтинг: {active_sessions[user_id].reiting}\n"
-            profile += f"Рейтинг команды: {teams[active_sessions[user_id].team_number].reiting}\n" if active_sessions[user_id].team_number in teams else ""
-            profile += f"Баланс: {active_sessions[user_id].balance} очков\n"
-            await callback_query.message.answer(profile, reply_markup=get_profile_keyboard())
-            await state.set_state(MainMenu.profile)
+                profile += f"Рейтинг: {active_sessions[user_id].reiting}\n"
+                profile += f"Рейтинг команды: {teams[active_sessions[user_id].team_number].reiting}\n" if active_sessions[user_id].team_number in teams else ""
+                profile += f"Баланс: {active_sessions[user_id].balance} очков\n"
+                await callback_query.message.answer(profile, reply_markup=get_profile_keyboard())
+                await state.set_state(MainMenu.profile)
         case "complaint":
-            await callback_query.message.answer("Вы подали жалобу.", reply_markup=get_main_menu_student_keyboard())
+            await callback_query.message.answer("На что будет жалоба.", reply_markup=get_complaint_keyboard())
             await state.set_state(MainMenu.complaint)
 
+@router.callback_query(MainMenu.complaint)
+async def process_complaint_callback(callback_query: Message, state: FSMContext):
+    data = callback_query.data
+    user_id = callback_query.from_user.id
+    if user_id not in complaintes:
+        complaintes[user_id] = Complaint(user_id=user_id, adresat=data, status="Новая")
+    await callback_query.message.answer("Выберете категорию жалобы.", reply_markup=get_complaint_category_keyboard())
+    await state.set_state(ComplaintProcess.waiting_for_complaint_text)
+
+@router.callback_query(ComplaintProcess.waiting_for_complaint_category)
+async def process_complaint_category_callback(callback_query: Message, state: FSMContext):
+    data = callback_query.data
+    user_id = callback_query.from_user.id
+    if user_id in complaintes:
+        complaintes[user_id].category = data
+        await callback_query.message.answer("Опишите вашу жалобу подробно.")
+        await state.set_state(ComplaintProcess.waiting_for_complaint_text)
+
+@router.message(ComplaintProcess.waiting_for_complaint_text)
+async def process_complaint_text(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    if user_id in complaintes:
+        complaintes[user_id].description = message.text
+        await message.answer("При наличии доказательств, прикрепите их в следующем сообщении. Максимальное количество файлов: \n Фото - 3 (суммарно до 5мб)\n Видео - 1 (до 20мб)\n Если доказательств нет, отправьте команду /skip")
+        await state.set_state(ComplaintProcess.waiting_for_complaint_files)
+    
 @router.message(Command("teg"))
 async def cmd_teg(message: Message):
     id = message.from_user.id
     await message.answer(f"{id}")
+
+@router.message(Command("skip"), ComplaintProcess.waiting_for_complaint_files)
+async def skip_files(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    if user_id in complaintes:
+        await message.answer("Жалоба отправлена без файлов.")
+        await state.clear()
+        await add_complaint(complaintes[user_id])
+        del complaintes[user_id]
+
 
 @router.message(Reg.waiting_for_bage_number)
 async def process_badge_number(message: Message, state: FSMContext):
@@ -185,8 +215,7 @@ async def main():
     dp.message.register(start_handler, CommandStart())
     dp.include_router(router)
 
-    await init_db()
-    await get_teams()
+    await load_datastore()
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

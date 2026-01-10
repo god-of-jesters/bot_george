@@ -1,4 +1,4 @@
-from database import DB_PATH
+from database import DB_PATH, USERS
 import aiosqlite
 from entityes.user import User
 
@@ -9,13 +9,18 @@ async def add_user(user: User):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """, (user.user_id, user.fio, user.role, user.team_number, user.badge_number, user.reiting, user.balance, user.date_registered))
         await db.commit()
+        USERS[user.user_id] = user
 
 async def get_user(tg_id: int) -> User | None:
+    if tg_id in USERS:
+        return USERS[tg_id]
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT tg_id, fio, team_number, role, num_badge, reiting, balance, date_registered FROM users WHERE tg_id = ?;", (tg_id,))
         row = await cursor.fetchone()
         if row:
-            return User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], num_badge=row[4], reiting=row[5], balance=row[6], date_registered=row[7])
+            user = User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], num_badge=row[4], reiting=row[5], balance=row[6], date_registered=row[7])
+            USERS[tg_id] = user
+            return user
         return None
 
 async def update_user(user: User):
@@ -26,11 +31,14 @@ async def update_user(user: User):
         WHERE tg_id = ?;
         """, (user.fio, user.role, user.team_number, user.num_badge, user.reiting, user.balance, user.date_registered, user.user_id))
         await db.commit()
+        USERS[user.user_id] = user
 
 async def delete_user(tg_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM users WHERE tg_id = ?;", (tg_id,))
         await db.commit()
+        if tg_id in USERS:
+            del USERS[tg_id]
 
 async def get_user_by_badge(badge_number: int) -> User | None:
     async with aiosqlite.connect(DB_PATH) as db:

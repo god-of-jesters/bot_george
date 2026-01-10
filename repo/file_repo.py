@@ -1,4 +1,4 @@
-from database import DB_PATH
+from database import DB_PATH, FILES
 import aiosqlite
 from entityes.file import File
 
@@ -9,8 +9,11 @@ async def add_file(file: File):
         VALUES (?, ?, ?, ?, ?);
         """, (file.file_tg_id, file.file_tg_file_id, file.file_name, file.mime_type, file.file_size))
         await db.commit()
+        FILES[file.file_id] = file
 
 async def get_file(file_id: int) -> File | None:
+    if file_id in FILES:
+        return FILES[file_id]
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT id, tg_id, tg_file_id, file_name, mime_type, file_size, created_at FROM files WHERE id = ?;", (file_id,))
         row = await cursor.fetchone()
@@ -26,8 +29,11 @@ async def update_file(file: File):
         WHERE id = ?;
         """, (file.file_tg_file_id, file.file_name, file.mime_type, file.file_size, file.file_id))
         await db.commit()
+        FILES[file.file_id] = file
 
 async def delete_file(file_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM files WHERE id = ?;", (file_id,))
         await db.commit()
+        if file_id in FILES:
+            del FILES[file_id]
