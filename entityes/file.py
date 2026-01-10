@@ -1,3 +1,5 @@
+from datetime import datetime
+
 class File:
     def __init__(self, id: str, tg_id: str, tg_file_id: int, file_name: str, mime_type: str, file_size: int, file_path: str, date_created: str = None):
         self.file_id = id
@@ -7,4 +9,4 @@ class File:
         self.file_size = file_size
         self.file_path = file_path
         self.mime_type = mime_type
-        self.date_created = date_created
+        self.date_created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

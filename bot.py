@@ -13,9 +13,9 @@ from repo.team_repo import *
 from repo.user_repo import *
 from repo.file_repo import *
 
-from entityes.sequence import Reg
+from entityes.sequence import *
 
-from keyboards import get_job_title_keyboard, get_registration_keyboard
+from keyboards import *
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -27,30 +27,36 @@ registration = {}
 router = Router()
 teams = {team.team_number: team for team in get_all_teams()}
 
+@router.callback_query(Reg.waiting_for_job_title)
+async def process_job_title_callback(callback_query, state: FSMContext):
+    user_id = callback_query.from_user.id
+    job_title = callback_query.data
+
+    role_map = {
+        "organizer": "Организатор",
+        "rating_team": "Команда рейтинга",
+        "rpg_organizers": "РПГ-организаторы",
+        "room_administrators": "Администраторы по комнатам",
+        "media_team": "Команда медиа",
+        "chief_organizer": "Главный организатор"
+    }
+
+    if job_title in role_map:
+        registration[user_id].role = role_map[job_title]
+        await add_user(registration[user_id])
+
+        active_sessions[user_id] = registration[user_id]
+        del registration[user_id]
+
+        await callback_query.message.answer("Регистрация завершена! Спасибо.")
+        await state.clear()
+    else:
+        await callback_query.message.answer("Неверный выбор должности. Пожалуйста, выберите вашу должность еще раз.", reply_markup=get_job_title_keyboard()) 
+
 @router.message(Command("teg"))
 async def cmd_teg(message: Message):
     id = message.from_user.id
     await message.answer(f"{id}")
-
-@router.message(Reg.waiting_for_fio)
-async def process_fio(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    registration[user_id].fio = message.text
-
-    with get_user_by_badge(registration[user_id].badge_number) as existing_user:
-        if existing_user:
-            if existing_user.fio != registration[user_id].fio:
-                await message.answer("Пользователь с таким номером бейджа уже зарегистрирован с другим ФИО. Пожалуйста, проверьте введенные данные.")
-                await state.set_state(Reg.waiting_for_bage_number)
-                return
-        
-    await add_user(registration[user_id])
-
-    active_sessions[user_id] = registration[user_id]
-    del registration[user_id]
-
-    await message.answer("Регистрация завершена! Спасибо.")
-    await state.clear()
 
 @router.message(Reg.waiting_for_bage_number)
 async def process_badge_number(message: Message, state: FSMContext):
@@ -71,6 +77,48 @@ async def process_badge_number(message: Message, state: FSMContext):
     await message.answer("Введите ФИО, все с большой буквы в именительном падеже.")
     await state.set_state(Reg.waiting_for_fio)
 
+@router.message(Reg.waiting_for_fio)
+async def process_fio(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    registration[user_id].fio = message.text
+
+    with get_user_by_badge(registration[user_id].badge_number) as existing_user:
+        if existing_user:
+            if existing_user.fio != registration[user_id].fio:
+                await message.answer("Пользователь с таким номером бейджа уже зарегистрирован с другим ФИО. Пожалуйста, проверьте введенные данные.")
+                await state.set_state(Reg.waiting_for_bage_number)
+                return
+    
+    if registration[user_id].badge_number >= 100 and registration[user_id].badge_number < 1000:
+        registration[user_id].role = "Участник"
+        await message.answer("Введите номер вашей команды.")
+        await state.set_state(Reg.waiting_for_team_number)
+    elif registration[user_id].badge_number >= 10 and registration[user_id].badge_number < 100:
+        await message.answer("Выберете вашу должность.", reply_markup=get_job_title_keyboard())
+        await state.set_state(Reg.waiting_for_job_title)
+    else: 
+        await message.answer("Неверный номер бейджа или роль. Пожалуйста, введите номер бейджа еще раз.")
+    
+@router.message(Reg.waiting_for_team_number)
+async def process_team_number(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    try:
+        team_number = int(message.text)
+    except ValueError:
+        await message.answer("Номер команды должен быть числом. Пожалуйста, введите номер команды еще раз.")
+        return
+    if team_number not in teams:
+        await message.answer("Такой команды нет. Введите номер команды еще раз.")
+        return
+    
+    await add_user(registration[user_id])
+
+    active_sessions[user_id] = registration[user_id]
+    del registration[user_id]
+
+    await message.answer("Регистрация завершена! Спасибо.")
+    await state.clear()
+
 async def start_handler(message: Message, state: FSMContext):
     user_id = message.from_user.id
 
@@ -82,14 +130,19 @@ async def start_handler(message: Message, state: FSMContext):
         )
         await state.set_state(Reg.waiting_for_bage_number)
     else:
-        main_menu = "Главное меню.\n" \
+        if active_sessions[user_id].role == "Участник":
+            await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
+            await state.set_state(MainMenu.main_menu)
+        elif
+        profile = "Профиль:\n" \
         f"ФИО: {registration[user_id].fio}\n Роль: {registration[user_id].role}\n" \
         f"Номер бейджа: {registration[user_id].num_badge}\n"
-        main_menu += f"Название команды: {teams[registration[user_id].team_number].team_name}\n" if registration[user_id].team_number in teams else "Не назначена команда\n"
-        main_menu += f"Рейтинг: {registration[user_id].reiting}\n"
-        main_menu += f"Рейтинг команды: {teams[registration[user_id].team_number].reiting}\n" if registration[user_id].team_number in teams else ""
-        main_menu += f"Баланс: {registration[user_id].balance} очков\n"
-        await message.answer(main_menu)
+        if registration[user_id].role == "Участник":
+            main_menu += f"Название команды: {teams[registration[user_id].team_number].team_name}\n" if registration[user_id].team_number in teams else "Не назначена команда\n"
+            main_menu += f"Рейтинг: {registration[user_id].reiting}\n"
+            main_menu += f"Рейтинг команды: {teams[registration[user_id].team_number].reiting}\n" if registration[user_id].team_number in teams else ""
+            main_menu += f"Баланс: {registration[user_id].balance} очков\n"
+            await message.answer(main_menu, reply_markup=get_registration_keyboard())
 
 async def main():
     bot = Bot(token=API_TOKEN)

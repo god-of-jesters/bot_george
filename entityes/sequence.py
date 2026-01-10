@@ -4,3 +4,8 @@ class Reg(StatesGroup):
     waiting_for_fio = State()
     waiting_for_bage_number = State()
     waiting_for_team_number = State()
+    waiting_for_job_title = State()
+
+class MainMenu(StatesGroup):
+    main_menu = State()
+    profile = State()
