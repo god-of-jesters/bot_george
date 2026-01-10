@@ -113,7 +113,6 @@ async def skip_files(message: Message, state: FSMContext):
         await add_complaint(complaintes[user_id])
         del complaintes[user_id]
 
-
 @router.message(Reg.waiting_for_bage_number)
 async def process_badge_number(message: Message, state: FSMContext):
     user_id = message.from_user.id
