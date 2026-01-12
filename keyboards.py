@@ -122,3 +122,9 @@ def get_complaint_category_keyboard():
     keyboard.button(text="Иное", callback_data="other_issues")
     keyboard.adjust(2)
     return keyboard.as_markup()
+
+def get_finish_complaint_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Завершить жалобу", callback_data="complaint_done")
+    kb.adjust(1)
+    return kb.as_markup()

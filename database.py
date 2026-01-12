@@ -36,10 +36,12 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tg_id INTEGER NOT NULL,
             tg_file_id TEXT NOT NULL,
+            complaint_id INTEGER,
             file_name TEXT,
             mime_type TEXT,
             file_size INTEGER,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (complaint_id) REFERENCES complaints(id) ON DELETE CASCADE
         );
         """)
         await db.execute("""
@@ -77,10 +79,10 @@ async def load_datastore():
             USERS[user.user_id] = user
 
         # Load files
-        cursor = await db.execute("SELECT id, tg_id, tg_file_id, file_name, mime_type, file_size, created_at FROM files;")
+        cursor = await db.execute("SELECT id, tg_id, tg_file_id, complaint_id, file_name, mime_type, file_size, created_at FROM files;")
         rows = await cursor.fetchall()
         for row in rows:
-            file = File(id=row[0], tg_id=row[1], tg_file_id=row[2], file_name=row[3], mime_type=row[4], file_size=row[5], date_created=row[6])
+            file = File(id=row[0], tg_id=row[1], tg_file_id=row[2], complaint_id=row[3], file_name=row[4], mime_type=row[5], file_size=row[6], date_created=row[7])
             FILES[file.id] = file
 
         # Load teams
@@ -94,5 +96,11 @@ async def load_datastore():
         cursor = await db.execute("SELECT id, user_id, adresat, description, date_created, date_resolved, status, execution FROM complaints;")
         rows = await cursor.fetchall()
         for row in rows:
-            complaint = Complaint(complaint_id=row[0], user_id=row[1], adresat=row[2], description=row[3], date_created=row[4], date_resolved=row[5], status=row[6], execution=row[7])
+            complaint = Complaint(complaint_id=row[0], user_id=row[1], adresat=row[2], description=row[3], status=row[6], execution=row[7])
+            complaint.date_created = row[4]
+            complaint.date_resolved = row[5]
+            # Load associated files
+            file_cursor = await db.execute("SELECT id FROM files WHERE complaint_id = ?;", (row[0],))
+            file_rows = await file_cursor.fetchall()
+            complaint.files = [fr[0] for fr in file_rows]
             COMPLAINTS[complaint.complaint_id] = complaint
