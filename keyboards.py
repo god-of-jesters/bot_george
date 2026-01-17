@@ -128,3 +128,17 @@ def get_finish_complaint_keyboard():
     kb.button(text="✅ Завершить жалобу", callback_data="complaint_done")
     kb.adjust(1)
     return kb.as_markup()
+
+def get_yes_no_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Да", callback_data="yes")
+    kb.button(text="Нет", callback_data="no")
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_violation_type_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Да", callback_data="yes")
+    kb.button(text="Нет", callback_data="no")
+    kb.adjust(1)
+    return kb.as_markup()

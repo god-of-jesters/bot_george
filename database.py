@@ -56,7 +56,8 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS complaints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            adresat TEXT NOT NULL,
+            adresat INTEGER NOT NULL,
+            violetion TEXT,
             description TEXT,
             date_created TEXT NOT NULL DEFAULT (datetime('now')),
             date_resolved TEXT,
@@ -83,7 +84,7 @@ async def load_datastore():
         rows = await cursor.fetchall()
         for row in rows:
             file = File(id=row[0], tg_id=row[1], tg_file_id=row[2], complaint_id=row[3], file_name=row[4], mime_type=row[5], file_size=row[6], date_created=row[7])
-            FILES[file.id] = file
+            FILES[file.file_id] = file
 
         # Load teams
         cursor = await db.execute("SELECT team_number, team_name FROM teams;")

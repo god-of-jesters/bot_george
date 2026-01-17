@@ -19,6 +19,12 @@ class MainMenu(StatesGroup):
 
 class ComplaintProcess(StatesGroup):
     waiting_for_complaint_text = State()
+    waiting_for_badge = State()
+    waiting_for_violation_type = State()
     waiting_for_complaint_category = State()
     waiting_for_complaint_files = State()
     waiting_for_complaint_confirmation = State()
+
+class YesNoChoice(StatesGroup):
+    waiting_for_alarm_complaint = State()
+    waiting_for_verdict = State()

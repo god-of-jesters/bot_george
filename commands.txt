@@ -1,4 +1,4 @@
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned #if nothing works
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 venv\Scripts\Activate.ps1
 
 deactivate

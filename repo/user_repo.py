@@ -47,3 +47,9 @@ async def get_user_by_badge(badge_number: int) -> User | None:
         if row:
             return User(user_id=row[0], fio=row[1], team_number=row[2], role=row[3], badge_number=row[4], reiting=row[5], balance=row[6])
         return None
+
+async def get_raiting_team_tg() -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute('SELECT tg_id FROM users WHERE role="Команда рейтинга"')
+        row = await cursor.fetchall()
+        return [i[0] for i in row]
