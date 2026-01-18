@@ -18,7 +18,8 @@ async def add_complaint(complaint: Complaint):
                 file.complaint_id = complaint.complaint_id
                 await update_file(file)
         COMPLAINTS[complaint.complaint_id] = complaint
-        print("Добавил жалобу")
+        return complaint.complaint_id
+        
 
 async def get_complaint(complaint_id: int) -> Complaint | None:
     if complaint_id in COMPLAINTS:

@@ -28,7 +28,21 @@ registration = {}
 complaintes = {}
 alarm : dict[int: dict[int, int]] = {}
 process_al = {}
-violetion_vines = {}
+violetion_vines = {
+    1: "Нахождение на базе без личной карточки участника",
+    2: "Нахождение в неподходящей под погодные условия одежде на улице",
+    3: "Употребление никотиносодержащей продукции в неположенном месте",
+    4: "Нецензурная речь",
+    5: "Провоз и употребление энергетических напитков",
+    6: "Нахождение после отбоя участника вне своей комнаты",
+    7: "Нарушение общественного спокойствия после отбоя",
+    8: "Пропуск программных моментов без уважительной причины",
+    9: "Порча имущества базы/организаторов/участников",
+    10: "Кража",
+    11: "Оскорбления/конфликты на почве розни",
+    12: "Опьянение",
+}
+special_step = {}
 _album_buffer: dict[tuple[int, str], list[Message]] = defaultdict(list)
 _album_tasks: dict[tuple[int, str], asyncio.Task] = {}
 
@@ -57,20 +71,12 @@ async def main_menu_callback(message: Message, state: FSMContext):
                 await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
     await state.set_state(MainMenu.main_menu)
 
-@router.callback_query(lambda c: c.data == "complaint_done", ComplaintProcess.waiting_for_complaint_files)
-async def finish_complaint_cb(callback: CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-    await callback.answer()
-    await add_complaint(complaintes[user_id])
+@router.message(Command("teg"))
+async def cmd_teg(message: Message):
+    id = message.from_user.id
+    await message.answer(f"{id}")
 
-    if complaintes[user_id].category == "alert":
-            await notify_all_reiting_team(callback.message.bot, complaintes[user_id], state)
-
-    if user_id in complaintes:
-        del complaintes[user_id]
-
-    await callback.message.answer("Жалоба отправлена. Спасибо.")
-    await show_main_menu(callback.bot, user_id, state)
+"""MAIN MENUS"""
 
 @router.callback_query(MainMenu.main_menu_student)
 async def show_profile(callback_query: CallbackQuery, state: FSMContext):
@@ -199,29 +205,6 @@ async def show_main_admins(callback_query: Message, state: FSMContext):
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
-@router.callback_query(lambda c: c.data == 'yes' or c.data == 'no', MainMenu.main_menu_rating_team)
-async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMContext):
-    user_id = callback_query.from_user.id
-    if callback_query.data == 'yes':
-        if len(alarm[user_id]) != 0:
-            com = await get_complaint(alarm[user_id])
-            if user_id in process_al:
-                process_al[user_id] = []
-            process_al[user_id].append(com.complaint_id)
-            await update_complaint(com.complaint_id, "view")
-            team = await get_raiting_team_tg()
-            for id in team:
-                alarm[id].remove(com.complaint_id)
-            user = await get_user(com.user_id)
-            await send_complaint_files(callback_query.bot, user_id, com.complaint_id)
-            await callback_query.message.answer("Жалоба от " + user.fio + "\nНа " + com.adresat + "\nЖалоба:" + com.description, reply_markup=get_yes_no_keyboard())
-            await state.set_state(YesNoChoice.waiting_for_verdict)
-        else:
-            await callback_query.message.answer('Простите эту жалобу уже рассматривает другой организатор')
-    else:
-        await callback_query.message.answer('Скип скип')
-        await show_main_menu(callback_query.bot, user_id, state)
-
 @router.callback_query(MainMenu.main_menu_rating_team)
 async def show_main_rating_team(callback_query: Message, state: FSMContext):
     user_id = callback_query.from_user.id
@@ -239,7 +222,7 @@ async def show_main_rating_team(callback_query: Message, state: FSMContext):
             await callback_query.message.answer("Жалобы.")
 
         case "participants":
-            await callback_query.message.answer("Участники.\n(Здесь будет модуль работы с участниками.)")
+            await callback_query.message.answer("Участники.\n")
 
         case "assign_rating":
             await callback_query.message.answer("Начисление и штрафы.\n(Здесь будет модуль начисления и штрафов.)")
@@ -293,6 +276,46 @@ async def show_main_chief_organizer(callback_query: Message, state: FSMContext):
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
+"""COMPLAINTS"""
+
+@router.callback_query(lambda c: c.data == "complaint_done", ComplaintProcess.waiting_for_complaint_files)
+async def finish_complaint_cb(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    await callback.answer()
+    await add_complaint(complaintes[user_id])
+
+    if complaintes[user_id].category == "alert":
+            await notify_all_reiting_team(callback.message.bot, complaintes[user_id], state)
+
+    if user_id in complaintes:
+        del complaintes[user_id]
+
+    await callback.message.answer("Жалоба отправлена. Спасибо.")
+    await show_main_menu(callback.bot, user_id, state)
+
+@router.callback_query(lambda c: c.data == 'yes' or c.data == 'no', MainMenu.main_menu_rating_team)
+async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    if callback_query.data == 'yes':
+        if len(alarm[user_id]) != 0:
+            com = await get_complaint(alarm[user_id])
+            if user_id in process_al:
+                process_al[user_id] = []
+            process_al[user_id].append(com.complaint_id)
+            await update_complaint(com.complaint_id, "view")
+            team = await get_raiting_team_tg()
+            for id in team:
+                alarm[id].remove(com.complaint_id)
+            user = await get_user(com.user_id)
+            await send_complaint_files(callback_query.bot, user_id, com.complaint_id)
+            await callback_query.message.answer("Жалоба от " + user.fio + "\nНа " + com.adresat + "\nЖалоба:" + com.description, reply_markup=get_yes_no_keyboard())
+            await state.set_state(YesNoChoice.waiting_for_verdict)
+        else:
+            await callback_query.message.answer('Простите эту жалобу уже рассматривает другой организатор')
+    else:
+        await callback_query.message.answer('Скип скип')
+        await show_main_menu(callback_query.bot, user_id, state)
+
 @router.callback_query(MainMenu.complaint)
 async def process_complaint_callback(callback_query: Message, state: FSMContext):
     data = callback_query.data
@@ -308,34 +331,83 @@ async def process_complaint_badge(message: Message, state: FSMContext):
     if not message.text.isdigit():
         await message.answer("Номер должен быть числом, введите еще раз")
         return
-    num = message.text
-    user = await get_user(num)
+    num = int(message.text)
+    user = await get_user_by_badge(num)
     if user:
-        complaintes[user_id].adresat = num
-        await message.answer('Выберете категорию нарушения.', reply_markup=get_violation_type_keyboard())
-        await state.set_state(ComplaintProcess.waiting_for_violation_type)
+        complaintes[user_id].adresat = user.user_id
+        
+        await message.answer(text="Выберете категорию жалобы.", reply_markup=get_complaint_category_keyboard())
+        await state.set_state(ComplaintProcess.waiting_for_complaint_category)
     else:
         await message.answer('Такого человека не существует, введите номер бейджа еще раз')
         return
 
 @router.callback_query(ComplaintProcess.waiting_for_violation_type)
 async def process_complaint_violation_type(callback_query: CallbackQuery, state: FSMContext):
-    data = callback_query.data
-    match data:
-        case 1:
-            return
-        case 2:
-            return
-    await state.set_state(ComplaintProcess.waiting_for_complaint_category)
+    data = int(callback_query.data)
+    user_id = callback_query.from_user.id
+    c1 = {
+        1: 'Провоз и употребление энергитических напитков',
+        2: 'Нахождение после отбоя участника вне своей комнаты',
+        3: 'Нарушение общественного спокойствия после отбоя',
+        4: 'Порча имущества базы/организаторов/участников',
+        5: 'Кража',
+        6: 'Опьянение'
+    }
+    c2 = {
+        1: 'Нахождение на базе без личной карточки участника',
+        2: 'Нахождение в неподходящей под погодные условия одежде на улице',
+        3: 'Употребление никотиносодержащей продукции в неположенном месте',
+        4: 'Нецензурная речь'
+    }
+    c3 = {
+        1: 'Пропуск программных моментов без уважительной причины',
+        2: 'Оскорбления/конфликты на почве розни'
+    }
+    match complaintes[user_id].category:
+        case 'alert':
+            complaintes[user_id].violetion = c1[data]
+        case 'soon':
+            complaintes[user_id].violetion = c2[data]
+        case _:
+            complaintes[user_id].violetion = c3[data]
+
+    await callback_query.message.answer("Опишите вашу жалобу подробно.")
+    await state.set_state(ComplaintProcess.waiting_for_complaint_text)
 
 @router.callback_query(ComplaintProcess.waiting_for_complaint_category)
 async def process_complaint_category_callback(callback_query: Message, state: FSMContext):
+    text_alert = "Выберете тип нарушения \n\
+1. Провоз и употребление энергитических напитков \n\
+2. Нахождение после отбоя участника вне своей комнаты \n\
+3. Нарушение общественного спокойствия после отбоя \n\
+4. Порча имущества базы/организаторов/участников \n\
+5. Кража \n\
+6. Опьянение"
+
+    text_soon = 'Выберете тип нарушения \n\
+1. Нахождение на базе без личной карточки участника \n\
+2. Нахождение в неподходящей под погодные условия одежде на улице \n\
+3. Употребление никотиносодержащей продукции в неположенном месте \n\
+4. Нецензурная речь\n'
+
+    text_other = """
+Выберете тип нарушения
+1. Пропуск программных моментов без уважительной причины
+2. Оскорбления/конфликты на почве розни
+"""
     data = callback_query.data
     user_id = callback_query.from_user.id
     if user_id in complaintes:
         complaintes[user_id].category = data
-        await callback_query.message.answer("Опишите вашу жалобу подробно.")
-        await state.set_state(ComplaintProcess.waiting_for_complaint_text)
+        match data:
+            case 'alert':
+                await callback_query.bot.send_message(user_id, text_alert, reply_markup=get_alert_keyboard())
+            case 'soon':
+                await callback_query.bot.send_message(user_id, text_soon, reply_markup=get_soon_keyboard())
+            case _:
+                await callback_query.bot.send_message(user_id, text_other, reply_markup=get_other_keyboard())
+        await state.set_state(ComplaintProcess.waiting_for_violation_type)
 
 @router.message(ComplaintProcess.waiting_for_complaint_text)
 async def process_complaint_text(message: Message, state: FSMContext):
@@ -344,21 +416,92 @@ async def process_complaint_text(message: Message, state: FSMContext):
         complaintes[user_id].description = message.text
         await message.answer("При наличии доказательств, прикрепите их в следующем сообщении. Отправьте фото или видео, или /skip чтобы завершить без файлов.")
         await state.set_state(ComplaintProcess.waiting_for_complaint_files)
-    
-@router.message(Command("teg"))
-async def cmd_teg(message: Message):
-    id = message.from_user.id
-    await message.answer(f"{id}")
+
 
 @router.message(Command("skip"), ComplaintProcess.waiting_for_complaint_files)
 async def skip_files(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    if user_id in complaintes:
-        await message.answer("Завершить жалобу?", reply_markup=get_finish_complaint_keyboard())
+    complaint = complaintes.get(user_id)
+    if not complaint:
+        await message.answer("Жалоба не найдена. Начните заново.")
+        return
 
-async def flush_album(user_id: int, media_group_id: str, bot: Bot, chat_id: int):
+    complaint_id = await add_complaint(complaint)
+
+    if getattr(complaint, "category", None) == "alert":
+        await notify_all_reiting_team(message.bot, complaint, state)
+
+    complaintes.pop(user_id, None)
+
+    await message.answer("Жалоба отправлена. Спасибо.")
+    await show_main_menu(message.bot, user_id, state)
+
+
+async def _finalize_complaint(bot: Bot, user_id: int, state: FSMContext, chat_id: int):
+    complaint = complaintes.get(user_id)
+    if not complaint:
+        await bot.send_message(chat_id, "Жалоба не найдена. Начните заново.")
+        return
+
+    complaint_id = await add_complaint(complaint)
+    await link_files_to_complaint(complaint_id, complaint.files)
+
+    if getattr(complaint, "category", None) == "alert":
+        await notify_all_reiting_team(bot, complaint, state)
+
+    complaintes.pop(user_id, None)
+
+    await bot.send_message(chat_id, "Жалоба отправлена. Спасибо.")
+    await show_main_menu(bot, user_id, state)
+
+
+async def add_media_to_current_complaint(message: Message, complaint: Complaint):
+    saved = 0
+
+    if message.photo:
+        if complaint.photo_count < MAX_PHOTOS:
+            photo = message.photo[-1]
+            file = File(
+                id=None,
+                tg_id=complaint.user_id,
+                tg_file_id=photo.file_id,
+                complaint_id=None,
+                file_name=f"photo_{complaint.photo_count + 1}.jpg",
+                mime_type="image/jpeg",
+                file_size=photo.file_size
+            )
+            await add_file(file)
+            complaint.files.append(file.file_id)
+            complaint.photo_count += 1
+            saved += 1
+
+    if message.video:
+        if complaint.video_count < MAX_VIDEOS:
+            video = message.video
+            file = File(
+                id=None,
+                tg_id=complaint.user_id,
+                tg_file_id=video.file_id,
+                complaint_id=None,
+                file_name=video.file_name or f"video_{complaint.video_count + 1}.mp4",
+                mime_type=video.mime_type or "video/mp4",
+                file_size=video.file_size
+            )
+            await add_file(file)
+            complaint.files.append(file.file_id)
+            complaint.video_count += 1
+            saved += 1
+
+    if saved == 0:
+        return 0, "Прикрепите фото или видео."
+    return saved, f"Доказательства приняты: +{saved}."
+
+
+async def flush_album(user_id: int, media_group_id: str, bot: Bot, chat_id: int, state: FSMContext):
     key = (user_id, media_group_id)
     msgs = _album_buffer.pop(key, [])
+    _album_tasks.pop(key, None)
+
     if not msgs:
         return
 
@@ -369,15 +512,12 @@ async def flush_album(user_id: int, media_group_id: str, bot: Bot, chat_id: int)
 
     results = []
     for msg in sorted(msgs, key=lambda m: m.message_id):
-        added, text = await add_media_to_current_complaint(msg, complaint)
+        _, text = await add_media_to_current_complaint(msg, complaint)
         results.append(text)
 
-    await bot.send_message(
-        chat_id,
-        "Альбом обработан:\n" + "\n".join("• " + r for r in results) +
-        "\n\nОтправьте ещё файлы или нажмите «Завершить».",
-        reply_markup=get_finish_complaint_keyboard()
-    )
+    await bot.send_message(chat_id, "Файлы обработаны:\n" + "\n".join("• " + r for r in results))
+    await _finalize_complaint(bot, user_id, state, chat_id)
+
 
 @router.message(ComplaintProcess.waiting_for_complaint_files)
 async def handle_files(message: Message, state: FSMContext):
@@ -387,9 +527,9 @@ async def handle_files(message: Message, state: FSMContext):
         await message.answer("Жалоба не найдена. Начните заново.")
         return
 
-    # Альбом
     if message.media_group_id:
-        key = (user_id, str(message.media_group_id))
+        mgid = str(message.media_group_id)
+        key = (user_id, mgid)
         _album_buffer[key].append(message)
 
         task = _album_tasks.get(key)
@@ -399,63 +539,36 @@ async def handle_files(message: Message, state: FSMContext):
         async def delayed():
             try:
                 await asyncio.sleep(ALBUM_FLUSH_DELAY)
-                await flush_album(user_id, str(message.media_group_id), message.bot, message.chat.id)
+                await flush_album(user_id, mgid, message.bot, message.chat.id, state)
             except asyncio.CancelledError:
-                pass
+                return
+            except Exception as e:
+                await message.bot.send_message(message.chat.id, f"Ошибка обработки альбома: {e}")
 
         _album_tasks[key] = asyncio.create_task(delayed())
         return
 
-    # Одиночный файл
-    added, text = await add_media_to_current_complaint(message, complaint)
-    await message.answer(
-        text + "\n\nОтправьте ещё файлы или нажмите «Завершить».",
-        reply_markup=get_finish_complaint_keyboard()
-    )
+    saved, text = await add_media_to_current_complaint(message, complaint)
+    if saved == 0:
+        await message.answer(text)
+        return
 
-async def add_media_to_current_complaint(message: Message, complaint: Complaint) -> tuple[bool, str]:
-    # Фото
-    if message.photo:
-        if complaint.photo_count >= MAX_PHOTOS:
-            return False, f"Лимит фото: {MAX_PHOTOS}. Больше не принимаю."
+    await message.answer("Файлы обработаны. " + text)
+    await _finalize_complaint(message.bot, user_id, state, message.chat.id)
 
-        photo = message.photo[-1]
-        file = File(
-            id=None,
-            tg_id=complaint.user_id,
-            tg_file_id=photo.file_id,
-            complaint_id=None,  # пока нет complaint_id
-            file_name=f"photo_{complaint.photo_count + 1}.jpg",
-            mime_type="image/jpeg",
-            file_size=photo.file_size
-        )
-        await add_file(file)          # важно: add_file должен проставить file.id
-        complaint.files.append(file.id)
-        complaint.photo_count += 1
+@router.callback_query(lambda c: c.data == 'agree' or c.data == 'disagree')
+async def process_complaint_student(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    if callback_query.data == 'agree':
+        active_sessions[user_id].reiting -= violetion_vines[special_step[user_id].violetion]
+        await update_user(active_sessions[user_id])
+        await callback_query.message.answer(f'С вас сняли {violetion_vines[special_step[user_id].violetion]} очков рейтинга.')
+        await show_main_menu(callback_query.bot, user_id, state)
+    else:
+        await callback_query.message.answer('Ваша жалоба отослана на рассмотрение команде рейтинга.')
+        await show_main_menu(callback_query.bot, user_id, state)
 
-        return True, f"Фото добавлено ({complaint.photo_count}/{MAX_PHOTOS})."
-
-    if message.video:
-        if complaint.video_count >= MAX_VIDEOS:
-            return False, f"Лимит видео: {MAX_VIDEOS}. Больше не принимаю."
-
-        video = message.video
-        file = File(
-            id=None,
-            tg_id=complaint.user_id,
-            tg_file_id=video.file_id,
-            complaint_id=None,
-            file_name=video.file_name or f"video_{complaint.video_count + 1}.mp4",
-            mime_type=video.mime_type or "video/mp4",
-            file_size=video.file_size
-        )
-        await add_file(file)
-        complaint.files.append(file.id)
-        complaint.video_count += 1
-
-        return True, f"Видео добавлено ({complaint.video_count}/{MAX_VIDEOS})."
-
-    return False, "Прикрепите фото или видео."
+"""REGISTRATION"""
 
 @router.message(Reg.waiting_for_bage_number)
 async def process_badge_number(message: Message, state: FSMContext):
@@ -478,56 +591,21 @@ async def process_badge_number(message: Message, state: FSMContext):
 @router.message(Reg.waiting_for_fio)
 async def process_fio(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    registration[user_id].fio = message.text
-
+    registration[user_id].fio = message.text.strip()
     existing_user = await get_user_by_badge(registration[user_id].badge_number)
-    if existing_user:
-        if existing_user.fio != registration[user_id].fio:
-            await message.answer("Пользователь с таким номером бейджа уже зарегистрирован с другим ФИО. Пожалуйста, проверьте введенные данные.")
-            await state.set_state(Reg.waiting_for_bage_number)
-            return
+    if existing_user != registration[user_id]:
+        await message.answer("Такого пользователя не существует, проверьте введеные данные. Пришлите номер бейджа")
+        await state.set_state(Reg.waiting_for_bage_number)
+        return
+    existing_user.user_id = user_id
+    if existing_user.user_id != user_id:
+        await update_user(existing_user) 
     
-    if registration[user_id].badge_number >= 100 and registration[user_id].badge_number < 1000:
-        registration[user_id].role = "Участник"
-        registration[user_id].team_number = registration[user_id].badge_number // 100
-        await add_user(registration[user_id])
+    active_sessions[user_id] = existing_user
+    del registration[user_id]
 
-        active_sessions[user_id] = registration[user_id]
-        del registration[user_id]
-
-        await message.answer("Регистрация завершена! Спасибо.")
-        await show_main_menu(message.bot, user_id, state)
-    elif registration[user_id].badge_number >= 10 and registration[user_id].badge_number < 100:
-        await message.answer("Выберете вашу должность.", reply_markup=get_job_title_keyboard())
-        await state.set_state(Reg.waiting_for_job_title)
-    else: 
-        await message.answer("Неверный номер бейджа или роль. Пожалуйста, введите номер бейджа еще раз.")
-
-@router.callback_query(Reg.waiting_for_job_title)
-async def process_job_title_callback(callback_query, state: FSMContext):
-    user_id = callback_query.from_user.id
-    job_title = callback_query.data
-
-    role_map = {
-        "organizer": "Организатор",
-        "rating_team": "Команда рейтинга",
-        "rpg_organizers": "РПГ-организаторы",
-        "room_administrators": "Администраторы по комнатам",
-        "media_team": "Команда медиа",
-        "chief_organizer": "Главный организатор"
-    }
-
-    if job_title in role_map:
-        registration[user_id].role = role_map[job_title]
-        await add_user(registration[user_id])
-
-        active_sessions[user_id] = registration[user_id]
-        del registration[user_id]
-
-        await callback_query.message.answer("Регистрация завершена! Спасибо.")
-        await state.clear()
-    else:
-        await callback_query.message.answer("Неверный выбор должности. Пожалуйста, выберите вашу должность еще раз.", reply_markup=get_job_title_keyboard()) 
+    await message.answer("Регистрация завершена! Спасибо.")
+    await show_main_menu(message.bot, user_id, state)
 
 async def start_handler(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -540,28 +618,7 @@ async def start_handler(message: Message, state: FSMContext):
         )
         await state.set_state(Reg.waiting_for_bage_number)
     else:
-        match active_sessions[user_id].role:
-            case "Участник":
-                await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
-                await state.set_state(MainMenu.main_menu_student)
-            case "Организатор":
-                await message.answer("Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
-                await state.set_state(MainMenu.main_menu_organizer)
-            case "РПГ-организаторы":
-                await message.answer("Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
-                await state.set_state(MainMenu.main_menu_rpg_organizer)
-            case "Администраторы по комнатам":
-                await message.answer("Главное меню.", reply_markup=get_main_menu_admins_keyboard())
-                await state.set_state(MainMenu.main_menu_admins)
-            case "Команда рейтинга":
-                await message.answer("Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
-                await state.set_state(MainMenu.main_menu_rating_team)
-            case "Команда медиа":
-                await message.answer("Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
-                await state.set_state(MainMenu.main_menu_media_team)
-            case "Главный организатор":
-                await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
-                await state.set_state(MainMenu.main_menu_chief_organizer)
+        await show_main_menu(message.bot, user_id, state=state)
 
 async def send_files(bot: Bot, complaint_id: int, tg_id: int = None) -> str:
     complaint = await get_complaint(complaint_id)
@@ -655,12 +712,17 @@ async def notify_persone(bot: Bot, complaint: Complaint, state: FSMContext):
                                Время жалобы: {complaint.date_created}.\n
                                Описание: {complaint.description}
                                """)
+        active_sessions[complaint.adresat] -= violetion_vines[complaint.violetion]
+        await update_user(active_sessions[complaint.adresat])
     else:
         await bot.send_message(complaint.adresat, f"""
                                Нас вас пришла новая жалоба от участника.\n
                                Время жалобы: {complaint.date_created}.\n
+                               Категория жалобы: {complaint.violetion}.\n
+                               Штраф: {violetion_vines[complaint.violetion]}.\n
                                Описание: {complaint.description} 
                                """, reply_markup=get_agree_disagree_keyboard())
+        special_step[complaint.adresat] = complaint
 
 async def main():
     global bot_instance

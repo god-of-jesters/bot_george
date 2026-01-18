@@ -29,7 +29,7 @@ async def add():
 
 async def show_all():
     async with aiosqlite.connect(DB_PATH) as db:
-        c = await db.execute("SELECT execution FROM complaints")
+        c = await db.execute("SELECT * FROM users")
         r = await c.fetchall()
         print(r)
         

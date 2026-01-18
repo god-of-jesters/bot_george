@@ -11,13 +11,12 @@ class User:
         self.reiting = reiting
         self.balance = balance
         self.date_registered = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    def set_user_info(self, fio: str = None, team_number: int = None, role: str = None, badge_number: int = None, date_registered: str = None):
-        self.fio = fio
-        self.team_number = team_number
-        self.role = role
-        self.badge_number = badge_number
-        self.date_registered = date_registered
+    
+    def __eq__(self, other):
+        if not isinstance(other, User):
+            return False
+        
+        return other.fio == self.fio and self.badge_number == other.badge_number
 
 @dataclass
 class Role:

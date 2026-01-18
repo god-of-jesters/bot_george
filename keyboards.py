@@ -136,9 +136,53 @@ def get_yes_no_keyboard():
     kb.adjust(1)
     return kb.as_markup()
 
+def get_alert_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="1", callback_data="1")
+    kb.button(text="2", callback_data="2")
+    kb.button(text="3", callback_data="3")
+    kb.button(text="4", callback_data="4")
+    kb.button(text="5", callback_data="5")
+    kb.button(text="6", callback_data="6")
+    kb.adjust(3)
+    return kb.as_markup()
+
+def get_soon_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="1", callback_data="1")
+    kb.button(text="2", callback_data="2")
+    kb.button(text="3", callback_data="3")
+    kb.button(text="4", callback_data="4")
+    kb.adjust(2)
+    return kb.as_markup()
+
+def get_other_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="1", callback_data="1")
+    kb.button(text="2", callback_data="2")
+    kb.adjust(1)
+    return kb.as_markup()
+
 def get_violation_type_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.button(text="Да", callback_data="yes")
-    kb.button(text="Нет", callback_data="no")
+    kb.button(text="1", callback_data="1")
+    kb.button(text="2", callback_data="2")
+    kb.button(text="3", callback_data="3")
+    kb.button(text="4", callback_data="4")
+    kb.button(text="5", callback_data="5")
+    kb.button(text="6", callback_data="6")
+    kb.button(text="7", callback_data="7")
+    kb.button(text="8", callback_data="8")
+    kb.button(text="9", callback_data="9")
+    kb.button(text="10", callback_data="10")
+    kb.button(text="11", callback_data="11")
+    kb.button(text="12", callback_data="12")
+    kb.adjust(3)
+    return kb.as_markup()
+
+def get_agree_disagree_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Согласиться", callback_data="agree")
+    kb.button(text="Оспорить", callback_data="disagree")
     kb.adjust(1)
     return kb.as_markup()
