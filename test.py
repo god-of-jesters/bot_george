@@ -17,7 +17,7 @@ async def add():
     await init_db()
     user1 = User(user_id=5732277748, fio="Test User", team_number=1, role="Участник", badge_number=123, reiting=0, balance=0)
     await add_user(user1)
-    user2 = User(user_id=1170037101, fio="Another User", team_number=1, role="Участник", badge_number=120, reiting=0, balance=0)
+    user2 = User(user_id=1170037101, fio="Another User", team_number=1, role="Участник", badge_number=120, reiting=100, balance=100)
     await add_user(user2)
     user3 = User(user_id=1438564718, fio="Test User", team_number=1, role="Команда рейтинга", badge_number=12, reiting=0, balance=0)
     await add_user(user3)
@@ -29,9 +29,8 @@ async def add():
 
 async def show_all():
     async with aiosqlite.connect(DB_PATH) as db:
-        c = await db.execute("SELECT * FROM users")
+        c = await db.execute("SELECT * FROM active")
         r = await c.fetchall()
-        print(r)
+        print([i[0] for i in r])
         
-asyncio.run(show_all())
-asyncio.run(get_oldest_complaint())
+asyncio.run(add())

@@ -28,3 +28,7 @@ class ComplaintProcess(StatesGroup):
 class YesNoChoice(StatesGroup):
     waiting_for_alarm_complaint = State()
     waiting_for_verdict = State()
+
+class ComplaintReview(StatesGroup):
+    stat = State()
+    safe = State()

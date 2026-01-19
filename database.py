@@ -66,6 +66,12 @@ async def init_db():
             FOREIGN KEY (user_id) REFERENCES users(tg_id) ON DELETE CASCADE
         );
         """)
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS active(
+                        user_id INTEGER,
+                        role TEXT)
+        """)
+
 
         await db.commit()
 

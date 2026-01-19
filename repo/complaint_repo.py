@@ -6,9 +6,9 @@ from repo.file_repo import get_file, update_file
 async def add_complaint(complaint: Complaint):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("""
-        INSERT INTO complaints (user_id, adresat, description, status, execution)
-        VALUES (?, ?, ?, ?, ?);
-        """, (complaint.user_id, complaint.adresat, complaint.description, complaint.status, complaint.execution))
+        INSERT INTO complaints (user_id, adresat, violetion, description, status, execution)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, (complaint.user_id, complaint.adresat, complaint.violetion, complaint.description, complaint.status, complaint.execution))
         complaint.complaint_id = cursor.lastrowid
         await db.commit()
         # Update files with complaint_id
@@ -28,9 +28,9 @@ async def get_complaint(complaint_id: int) -> Complaint | None:
         cursor = await db.execute("SELECT id, user_id, adresat, violetion, description, date_created, date_resolved, status, execution FROM complaints WHERE id = ?;", (complaint_id,))
         row = await cursor.fetchone()
         if row:
-            complaint = Complaint(complaint_id=row[0], user_id=row[1], adresat=row[2], violetion=row[3], description=row[4], date_created=row[5], date_resolved=[6], status=row[7], execution=row[8])
-            complaint.date_created = row[4]
-            complaint.date_resolved = row[5]
+            complaint = Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+            complaint.date_created = row[5]
+            complaint.date_resolved = row[6]
             # Load files
             from repo.file_repo import get_files_by_complaint
             files = await get_files_by_complaint(complaint_id)
@@ -77,18 +77,28 @@ async def get_oldest_complaint() -> Complaint:
         cur = await db.execute("""
             SELECT *
             FROM complaints
-            WHERE status IN ('alert', 'soon', 'other_issues') AND execution == "new" 
-            ORDER BY
-              CASE status
-                WHEN 'alert' THEN 1
-                WHEN 'soon' THEN 2
-                WHEN 'other_issues' THEN 3  
-                ELSE 99
-              END,
-              date_created ASC,
-              id ASC
+            WHERE execution = "new" AND status = "alert"
             LIMIT 1
         """)
         row = await cur.fetchone()
-        print(row)
-        return row
+        if row:
+            return Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+        cur = await db.execute("""
+            SELECT *
+            FROM complaints
+            WHERE execution = "new" AND status = "soon"
+            LIMIT 1
+        """)
+        row = await cur.fetchone()
+        if row:
+            return Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+        cur = await db.execute("""
+            SELECT *
+            FROM complaints
+            WHERE execution = "new"
+            LIMIT 1
+        """)
+        row = await cur.fetchone()
+        if row:
+            return Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+        return None

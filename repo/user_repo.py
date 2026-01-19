@@ -53,3 +53,14 @@ async def get_raiting_team_tg() -> list[int]:
         cursor = await db.execute('SELECT tg_id FROM users WHERE role="Команда рейтинга"')
         row = await cursor.fetchall()
         return [i[0] for i in row]
+
+async def get_active_users() -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute('SELECT user_id FROM active')
+        row = await cursor.fetchall()
+        return [i[0] for i in row]
+
+async def add_active(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute('INSERT INTO active VALUES(?, "балванка")', (user_id, ))
+        await db.commit()

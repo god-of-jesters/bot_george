@@ -10,7 +10,7 @@ class Complaint:
         self.date_created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.date_resolved = None
         self.status = status
-        self.execution = "new"
+        self.execution = "new" or execution
         self.files = files if files is not None else []  # Список id файлов, связанных с жалобой
         self.video_count = 0
         self.photo_count = 0
