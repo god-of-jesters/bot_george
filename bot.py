@@ -51,6 +51,113 @@ MAX_VIDEOS = 1
 ALBUM_FLUSH_DELAY = 0.7
 router = Router()
 
+@router.callback_query(lambda c: c.data == 'yes' or c.data == 'no', ComplaintReview.main)
+async def process_complaint_from_main(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    if callback_query.data == 'yes':
+        adr = await get_user(al[user_id].adresat)
+        adr.reiting -= violetion_vines[al[user_id].violetion]
+        await update_user(adr)
+        await callback_query.bot.send_message(adr.user_id, 
+                               f"""
+                               Нас вас пришла новая жалоба. Снято {violetion_vines[al[user_id].violetion]} единиц рейтинга.\n
+                               Время жалобы: {al[user_id].date_created}.\n
+                               Описание: {al[user_id].description}
+                               """)
+        del adr
+
+        al[user_id].execution = 'done'
+        await update_complaint(al[user_id])
+        del al[user_id]
+        await callback_query.answer('Успешно сняли рейтинг')
+    else:
+        adr = await get_user(al[user_id])
+        await callback_query.bot.send_message(adr.user_id, f'На вас была подана жалоба. Команда рейтинга посчитала, что жалоба недействительна')
+        del adr
+        await callback_query.answer('Успешно защитили человека')
+    await show_main_menu(callback_query.bot, user_id, state)
+
+@router.callback_query(lambda c: c.data == 'yes' or c.data == 'no', ComplaintReview.stat)
+async def process_complaint_fate(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    if callback_query.data == 'yes':
+        adr = await get_user(al[user_id].adresat)
+        adr.reiting -= violetion_vines[al[user_id].violetion]
+        await update_user(adr)
+        await callback_query.bot.send_message(adr.user_id, 
+                               f"""
+                               Нас вас пришла новая жалоба. Снято {violetion_vines[al[user_id].violetion]} единиц рейтинга.\n
+                               Время жалобы: {al[user_id].date_created}.\n
+                               Описание: {al[user_id].description}
+                               """)
+        del adr
+
+        al[user_id].execution = 'done'
+        await update_complaint(al[user_id])
+        del al[user_id]
+
+        other = await get_oldest_complaint()
+        if other:
+            if other.status == 'alert':
+                await callback_query.message.answer('Жалоба успешно обработана. Есть еще срочные жалобы, ответить?', reply_markup=get_yes_no_keyboard())
+                await state.set_state(ComplaintReview.safe)
+            else:
+                await callback_query.message.answer('Жалоба успешно обработана.') 
+                await show_main_menu(callback_query.bot, user_id, state)
+    else:
+        adr = await get_user(al[user_id])
+        await callback_query.bot.send_message(adr.user_id, f'На вас была подана жалоба. Команда рейтинга посчитала, что жалоба недействительна')
+        del adr
+
+@router.callback_query(lambda c: c.data in ("yes", "no"))
+async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
+
+    user_id = callback_query.from_user.id
+
+    if callback_query.data == "no":
+        await callback_query.message.answer("Скип скип")
+        await show_main_menu(callback_query.bot, user_id, state)
+        return
+
+    queue = alarm[user_id]
+    if not queue:
+        await callback_query.message.answer("Срочных жалоб сейчас нет.")
+        await show_main_menu(callback_query.bot, user_id, state)
+        return
+
+    com = None
+    while queue:
+        cin = queue[0]
+        cand = await get_complaint(cin)
+
+        if cand and cand.execution == "new" and cand.status == "alert":
+            com = cand
+            queue.pop(0)
+            break
+        else:
+            queue.pop(0)
+
+    if not com:
+        await callback_query.message.answer("Срочных жалоб сейчас нет.")
+        await show_main_menu(callback_query.bot, user_id, state)
+        return
+
+    process_al.setdefault(user_id, []).append(com.complaint_id)
+    await update_execution(com.complaint_id, "view")
+
+    user = await get_user(com.user_id)
+    adr = await get_user(com.adresat)
+
+    await send_complaint_files(callback_query.bot, user_id, com.complaint_id)
+    await callback_query.message.answer(
+        f"Жалоба от {user.fio}\nНа {adr.fio}\nЖалоба: {com.description}",
+        reply_markup=get_yes_no_keyboard()
+    )
+
+    al[user_id] = com
+    await state.set_state(ComplaintReview.stat)
+
 @router.message(MainMenu.profile)
 async def main_menu_callback(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -220,8 +327,11 @@ async def show_main_rating_team(callback_query: Message, state: FSMContext):
 
         case "view_complaints":
             complaint = await get_oldest_complaint()
-            await callback_query.message.answer(f"Жалобы. {complaint.description}")
-
+            al[user_id] = complaint
+            await send_complaint_files(callback_query.bot, user_id, complaint.complaint_id)
+            await callback_query.message.answer(f"Статус: {complaint.status}\nДата создания: {complaint.date_created}\nЖалоба: {complaint.description}\n \
+                                                Тип жалобы: {complaint.violetion}", reply_markup=get_yes_no_keyboard())
+            await state.set_state(ComplaintReview.main)
         case "participants":
             await callback_query.message.answer("Участники.\n")
 
@@ -293,83 +403,6 @@ async def finish_complaint_cb(callback: CallbackQuery, state: FSMContext):
 
     await callback.message.answer("Жалоба отправлена. Спасибо.")
     await show_main_menu(callback.bot, user_id, state)
-
-@router.callback_query(lambda c: c.data == 'yes' or c.data == 'no', ComplaintReview.stat)
-async def process_complaint_fate(callback_query: CallbackQuery, state: FSMContext):
-    user_id = callback_query.from_user.id
-    if callback_query.data == 'yes':
-        adr = await get_user(al[user_id])
-        adr.reiting -= violetion_vines[al[user_id].violetion]
-        await update_user(adr)
-        await callback_query.bot.send_message(adr.user_id, 
-                               f"""
-                               Нас вас пришла новая жалоба. Снято {violetion_vines[al[user_id].violetion]} единиц рейтинга.\n
-                               Время жалобы: {al[user_id].date_created}.\n
-                               Описание: {al[user_id].description}
-                               """)
-        del adr
-
-        al[user_id].execution = 'done'
-        await update_complaint(al[user_id])
-        del al[user_id]
-
-        other = await get_oldest_complaint()
-        if other:
-            if other.status == 'alert':
-                
-    else:
-        adr = await get_user(al[user_id])
-        await callback_query.bot.send_message(adr.user_id, f'На вас была подана жалоба. Команда рейтинга посчитала, что жалоба недействительна')
-        del adr
-
-@router.callback_query(lambda c: c.data in ("yes", "no"))
-async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
-
-    user_id = callback_query.from_user.id
-
-    if callback_query.data == "no":
-        await callback_query.message.answer("Скип скип")
-        await show_main_menu(callback_query.bot, user_id, state)
-        return
-
-    queue = alarm.get(user_id, [])
-    if not queue:
-        await callback_query.message.answer("Срочных жалоб сейчас нет.")
-        await show_main_menu(callback_query.bot, user_id, state)
-        return
-
-    com = None
-    while queue:
-        cid = queue[0]
-        cand = await get_complaint(cid)
-
-        if cand and cand.execution == "new" and cand.status == "alert":
-            com = cand
-            queue.pop(0)
-            break
-        else:
-            queue.pop(0)
-
-    if not com:
-        await callback_query.message.answer("Срочных жалоб сейчас нет.")
-        await show_main_menu(callback_query.bot, user_id, state)
-        return
-
-    process_al.setdefault(user_id, []).append(com.complaint_id)
-    await update_execution(com.complaint_id, "view")
-
-    user = await get_user(com.user_id)
-    adr = await get_user(com.adresat)
-
-    await send_complaint_files(callback_query.bot, user_id, com.complaint_id)
-    await callback_query.message.answer(
-        f"Жалоба от {user.fio}\nНа {adr.fio}\nЖалоба: {com.description}",
-        reply_markup=get_yes_no_keyboard()
-    )
-
-    al[user_id] = com
-    await state.set_state(ComplaintReview.stat)
 
 @router.callback_query(MainMenu.complaint)
 async def process_complaint_callback(callback_query: Message, state: FSMContext):
@@ -633,18 +666,21 @@ async def process_badge_number(message: Message, state: FSMContext):
     user_id = message.from_user.id
     try:
         badge_number = int(message.text)
+        existing_user = await get_user_by_badge(badge_number)
+        user = await get_user(user_id)
+        if not existing_user:
+            await message.answer("Такого пользователя нет. Введите номер бейджа еще раз.")
+            return
+        if user.badge_number == badge_number:
+            await message.answer('Нельзя подать жалобу на самого себя, введите еще раз номер бейджа.')
+            return
+        registration[user_id].badge_number = int(message.text)
+
+        await message.answer("Введите ФИО, все с большой буквы в именительном падеже.")
+        await state.set_state(Reg.waiting_for_fio)
     except ValueError:
         await message.answer("Номер бейджа должен быть числом. Пожалуйста, введите номер бейджа еще раз.")
         return
-    existing_user = await get_user_by_badge(badge_number)
-    if not existing_user:
-        await message.answer("Такого пользователя нет. Введите номер бейджа еще раз.")
-        return
-    
-    registration[user_id].badge_number = int(message.text)
-
-    await message.answer("Введите ФИО, все с большой буквы в именительном падеже.")
-    await state.set_state(Reg.waiting_for_fio)
 
 @router.message(Reg.waiting_for_fio)
 async def process_fio(message: Message, state: FSMContext):
@@ -746,13 +782,14 @@ async def send_complaint_files(bot: Bot, chat_id: int, complaint_id: int):
 
 async def notify_all_reiting_team(bot: Bot, complaint: Complaint, state: FSMContext):
     team = await get_raiting_team_tg()
-    for id in team:
-        await bot.send_message(id, f"Пришла срочная жалоба! Ответить на нее?", reply_markup=get_yes_no_keyboard())
-        if id not in alarm:
-            alarm[id] = []
-        com = await get_oldest_complaint()
-        if com:
-            alarm[id].append[com.complaint_id]
+    for member_id in team:
+        await bot.send_message(
+            member_id,
+            "Пришла срочная жалоба! Ответить на неё?",
+            reply_markup=get_yes_no_keyboard()
+        )
+        alarm.setdefault(member_id, [])
+        alarm[member_id].append(complaint.complaint_id)
 
 async def notify_persone(bot: Bot, complaint: Complaint, state: FSMContext):
     fr = await get_user(complaint.user_id)
@@ -784,7 +821,6 @@ async def notify_persone(bot: Bot, complaint: Complaint, state: FSMContext):
                                Штраф: {violetion_vines[complaint.violetion]}.\n
                                Описание: {complaint.description} 
                                """, reply_markup=get_agree_disagree_keyboard())
-        special_step[complaint.adresat] = complaint
 
 async def main():
     global bot_instance
@@ -795,6 +831,9 @@ async def main():
     dp.include_router(router)
 
     await load_datastore()
+    actives = await get_active_users()
+    for i in actives:
+        active_sessions[i] = await get_user(i)
     await dp.start_polling(bot_instance)
 
 if __name__ == "__main__":
