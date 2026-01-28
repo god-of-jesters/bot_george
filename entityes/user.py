@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 class User:
-    def __init__(self, user_id: int, fio: str = None, team_number: int = None, role: str = None, badge_number: int = None, reiting: int = None, balance: int = None):
+    def __init__(self, user_id: int, fio: str = None, team_number: int = None, role: str = None, badge_number: int = None, reiting: int = None, date_registered: str = None, balance: int = None):
         self.user_id = user_id
         self.fio = fio
         self.team_number = team_number
@@ -10,7 +10,7 @@ class User:
         self.badge_number = badge_number
         self.reiting = reiting
         self.balance = balance
-        self.date_registered = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.date_registered = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if date_registered is None else date_registered
     
     def __eq__(self, other):
         if not isinstance(other, User):

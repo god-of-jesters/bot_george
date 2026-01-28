@@ -25,10 +25,24 @@ async def get_complaint(complaint_id: int) -> Complaint | None:
     if complaint_id in COMPLAINTS:
         return COMPLAINTS[complaint_id]
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT id, user_id, adresat, violetion, description, date_created, date_resolved, status, execution FROM complaints WHERE id = ?;", (complaint_id,))
+        cursor = await db.execute(
+            "SELECT id, user_id, adresat, violetion, description, date_created, date_resolved, status, execution "
+            "FROM complaints WHERE id = ?;",
+            (complaint_id,)
+        )
         row = await cursor.fetchone()
         if row:
-            complaint = Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+            # columns: 0=id, 1=user_id, 2=adresat, 3=violetion, 4=description,
+            # 5=date_created, 6=date_resolved, 7=status, 8=execution
+            complaint = Complaint(
+                complaint_id=row[0],
+                user_id=row[1],
+                adresat=row[2],
+                violetion=row[3],
+                description=row[4],
+                status=row[7],
+                execution=row[8],
+            )
             complaint.date_created = row[5]
             complaint.date_resolved = row[6]
             # Load files
@@ -54,7 +68,7 @@ async def update_execution(complaint_id, execution):
         UPDATE complaints
         SET execution = ?
         WHERE id = ?;
-        """, (complaint_id, execution))
+        """, (execution, complaint_id))
         await db.commit()
         COMPLAINTS[complaint_id].execution = execution
 
@@ -82,7 +96,15 @@ async def get_oldest_complaint() -> Complaint:
         """)
         row = await cur.fetchone()
         if row:
-            return Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+            return Complaint(
+                complaint_id=row["id"],
+                user_id=row["user_id"],
+                adresat=row["adresat"],
+                violetion=row["violetion"],
+                description=row["description"],
+                status=row["status"],
+                execution=row["execution"],
+            )
         cur = await db.execute("""
             SELECT *
             FROM complaints
@@ -91,7 +113,15 @@ async def get_oldest_complaint() -> Complaint:
         """)
         row = await cur.fetchone()
         if row:
-            return Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+            return Complaint(
+                complaint_id=row["id"],
+                user_id=row["user_id"],
+                adresat=row["adresat"],
+                violetion=row["violetion"],
+                description=row["description"],
+                status=row["status"],
+                execution=row["execution"],
+            )
         cur = await db.execute("""
             SELECT *
             FROM complaints
@@ -100,5 +130,13 @@ async def get_oldest_complaint() -> Complaint:
         """)
         row = await cur.fetchone()
         if row:
-            return Complaint(row[0], row[1], row[2], row[3], row[4], row[6], row[7])
+            return Complaint(
+                complaint_id=row["id"],
+                user_id=row["user_id"],
+                adresat=row["adresat"],
+                violetion=row["violetion"],
+                description=row["description"],
+                status=row["status"],
+                execution=row["execution"],
+            )
         return None

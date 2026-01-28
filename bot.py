@@ -31,6 +31,7 @@ alarm : dict[int: dict[int, int]] = {}
 process_al = {}
 al = {}
 edit_users = {}
+special_step = {}
 violetion_vines = {
     "Нахождение на базе без личной карточки участника": 10,
     "Нахождение в неподходящей под погодные условия одежде на улице": 7,
@@ -351,7 +352,7 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
                 await state.set_state(ComplaintReview.main)
             else:
                 await callback_query.message.answer(f'Пока что нет жалоб.')
-                await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_rating_team)
                 await show_main_menu(callback_query.bot, user_id, state)
         case "participants":
             mes = await get_roles_stats_message()
@@ -359,13 +360,13 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
             await state.set_state(MainMenu.users)
 
         case "assign_rating":
-            await callback_query.message.answer("Начисление и штрафы.\n(Здесь будет модуль начисления и штрафов.)")
+            await callback_query.message.answer("Начисление и штрафы.\n")
 
         case "inbox_messages":
-            await callback_query.message.answer("Входящие сообщения.\n(Здесь будут входящие сообщения.)")
+            await callback_query.message.answer("Входящие сообщения.\n")
 
         case "mailing":
-            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
+            await callback_query.message.answer("Рассылка.\n")
 
         case "security":
             await callback_query.message.answer("Безопастность.\n(Здесь будет модуль безопасности.)")
@@ -448,7 +449,7 @@ async def process_complaint_badge(message: Message, state: FSMContext):
     num = int(message.text)
     user = await get_user_by_badge(num)
     if user:
-        if user == active_sessions[user_id]:
+        if num == active_sessions[user_id].badge_number:
             await message.answer('Нельзя подать жалобу на себя же. Введите еще раз номер бейджа')
             await state.set_state(ComplaintProcess.waiting_for_badge)
             return
@@ -459,6 +460,40 @@ async def process_complaint_badge(message: Message, state: FSMContext):
     else:
         await message.answer('Такого человека не существует, введите номер бейджа еще раз')
         return
+
+@router.callback_query(ComplaintProcess.waiting_for_complaint_category)
+async def process_complaint_category_callback(callback_query: Message, state: FSMContext):
+    text_alert = "Выберете тип нарушения \n\
+    1. Провоз и употребление энергитических напитков \n\
+    2. Нахождение после отбоя участника вне своей комнаты \n\
+    3. Нарушение общественного спокойствия после отбоя \n\
+    4. Порча имущества базы/организаторов/участников \n\
+    5. Кража \n\
+    6. Опьянение"
+
+    text_soon = 'Выберете тип нарушения \n\
+    1. Нахождение на базе без личной карточки участника \n\
+    2. Нахождение в неподходящей под погодные условия одежде на улице \n\
+    3. Употребление никотиносодержащей продукции в неположенном месте \n\
+    4. Нецензурная речь\n'
+
+    text_other = """
+    Выберете тип нарушения
+    1. Пропуск программных моментов без уважительной причины
+    2. Оскорбления/конфликты на почве розни
+    """
+    data = callback_query.data
+    user_id = callback_query.from_user.id
+    if user_id in complaintes:
+        complaintes[user_id].status = data
+        match data:
+            case 'alert':
+                await callback_query.bot.send_message(user_id, text_alert, reply_markup=get_alert_keyboard())
+            case 'soon':
+                await callback_query.bot.send_message(user_id, text_soon, reply_markup=get_soon_keyboard())
+            case _:
+                await callback_query.bot.send_message(user_id, text_other, reply_markup=get_other_keyboard())
+        await state.set_state(ComplaintProcess.waiting_for_violation_type)
 
 @router.callback_query(ComplaintProcess.waiting_for_violation_type)
 async def process_complaint_violation_type(callback_query: CallbackQuery, state: FSMContext):
@@ -493,40 +528,6 @@ async def process_complaint_violation_type(callback_query: CallbackQuery, state:
     await callback_query.message.answer("Опишите вашу жалобу подробно.")
     await state.set_state(ComplaintProcess.waiting_for_complaint_text)
 
-@router.callback_query(ComplaintProcess.waiting_for_complaint_category)
-async def process_complaint_category_callback(callback_query: Message, state: FSMContext):
-    text_alert = "Выберете тип нарушения \n\
-1. Провоз и употребление энергитических напитков \n\
-2. Нахождение после отбоя участника вне своей комнаты \n\
-3. Нарушение общественного спокойствия после отбоя \n\
-4. Порча имущества базы/организаторов/участников \n\
-5. Кража \n\
-6. Опьянение"
-
-    text_soon = 'Выберете тип нарушения \n\
-1. Нахождение на базе без личной карточки участника \n\
-2. Нахождение в неподходящей под погодные условия одежде на улице \n\
-3. Употребление никотиносодержащей продукции в неположенном месте \n\
-4. Нецензурная речь\n'
-
-    text_other = """
-Выберете тип нарушения
-1. Пропуск программных моментов без уважительной причины
-2. Оскорбления/конфликты на почве розни
-"""
-    data = callback_query.data
-    user_id = callback_query.from_user.id
-    if user_id in complaintes:
-        complaintes[user_id].status = data
-        match data:
-            case 'alert':
-                await callback_query.bot.send_message(user_id, text_alert, reply_markup=get_alert_keyboard())
-            case 'soon':
-                await callback_query.bot.send_message(user_id, text_soon, reply_markup=get_soon_keyboard())
-            case _:
-                await callback_query.bot.send_message(user_id, text_other, reply_markup=get_other_keyboard())
-        await state.set_state(ComplaintProcess.waiting_for_violation_type)
-
 @router.message(ComplaintProcess.waiting_for_complaint_text)
 async def process_complaint_text(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -554,7 +555,6 @@ async def skip_files(message: Message, state: FSMContext):
     await message.answer("Жалоба отправлена. Спасибо.")
     await show_main_menu(message.bot, user_id, state)
 
-
 async def _finalize_complaint(bot: Bot, user_id: int, state: FSMContext, chat_id: int):
     complaint = complaintes.get(user_id)
     if not complaint:
@@ -572,7 +572,6 @@ async def _finalize_complaint(bot: Bot, user_id: int, state: FSMContext, chat_id
 
     await bot.send_message(chat_id, "Жалоба отправлена. Спасибо.")
     await show_main_menu(bot, user_id, state)
-
 
 async def add_media_to_current_complaint(message: Message, complaint: Complaint):
     saved = 0
@@ -621,7 +620,6 @@ async def add_media_to_current_complaint(message: Message, complaint: Complaint)
         return 0, "Прикрепите фото или видео."
     return saved, f"Доказательства приняты: +{saved}."
 
-
 async def flush_album(user_id: int, media_group_id: str, bot: Bot, chat_id: int, state: FSMContext):
     key = (user_id, media_group_id)
     msgs = _album_buffer.pop(key, [])
@@ -642,7 +640,6 @@ async def flush_album(user_id: int, media_group_id: str, bot: Bot, chat_id: int,
 
     await bot.send_message(chat_id, "Файлы обработаны:\n" + "\n".join("• " + r for r in results))
     await _finalize_complaint(bot, user_id, state, chat_id)
-
 
 @router.message(ComplaintProcess.waiting_for_complaint_files)
 async def handle_files(message: Message, state: FSMContext):
@@ -741,6 +738,12 @@ async def process_user_data_badge(message: Message, state: FSMContext):
     num = int(message.text)
     user = await get_user_by_badge(num)
     if user:
+        if user.user_id == user_id:
+            await message.answer("Вы не можете изменить данные самого себя.")
+            return
+        if user.role == "Главный организатор" or user.role == 'Команда рейтинга':
+            await message.answer("Вы не можете изменить данные этого пользователя.")
+            return
         edit_users[user_id] = user
         await message.answer(f"Выбран пользователь: {user.fio}. Выберете что будем изменять.", reply_markup=get_edit_badge_keyboard())
         await state.set_state(UserDataEdit.waiting_for_change_choice)
@@ -895,7 +898,7 @@ async def process_fio(message: Message, state: FSMContext):
     del registration[user_id]
 
     await message.answer("Регистрация завершена! Спасибо.")
-    await add_active(user_id)
+    await add_active(user_id, active_sessions[user_id].role)
     await show_main_menu(message.bot, user_id, state)
 
 async def start_handler(message: Message, state: FSMContext):
@@ -987,7 +990,6 @@ async def notify_all_reiting_team(bot: Bot, complaint: Complaint, state: FSMCont
         )
         alarm.setdefault(member_id, [])
         alarm[member_id].append(complaint.complaint_id)
-
 
 async def notify_persone(bot: Bot, complaint: "Complaint", state: FSMContext):
     fr = await get_user(complaint.user_id)
