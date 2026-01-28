@@ -22,7 +22,7 @@ def get_main_menu_student_keyboard():
     keyboard.button(text="Профиль", callback_data="profile")
     keyboard.button(text="Подать жалобу", callback_data="complaint")
     keyboard.button(text="Мои жалобы", callback_data="my_complaints")
-    keyboard.button(text="Магазин", callback_data="shop")
+    keyboard.button(text="Развлечения", callback_data="entertainment")
     keyboard.button(text="Задать вопрос", callback_data="ask_question")
     keyboard.button(text="Помощь", callback_data="help")
     keyboard.adjust(2)
@@ -204,5 +204,22 @@ def get_edit_badge_keyboard():
     kb.button(text="Рейтинг", callback_data=f"reiting")
     kb.button(text="Баланс", callback_data=f"balance")
     kb.button(text="Назад", callback_data="edit_user_back")
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_student_entertainment_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Магазин', callback_data='shop')
+    kb.button(text='Задания', callback_data='tasks')
+    kb.button(text='ЗАГС', callback_data='zags')
+    kb.button(text='Назад', callback_data='back_to_main_menu')
+    kb.adjust(2)
+    return kb.as_markup()
+
+def get_student_help_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Правила и обязанности участника', callback_data='rules')
+    kb.button(text='Помощь по работе с ботом', callback_data='help_in_work')
+    kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(1)
     return kb.as_markup()

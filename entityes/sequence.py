@@ -17,6 +17,8 @@ class MainMenu(StatesGroup):
     profile = State()
     complaint = State()
     users = State()
+    student_entertainment = State()
+    student_help = State()
 
 class ComplaintProcess(StatesGroup):
     waiting_for_complaint_text = State()

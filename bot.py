@@ -77,6 +77,20 @@ async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint"
 
     await update_complaint(com)
 
+    # Notify the user who filed the complaint after it was processed
+    verdict_text = "удовлетворена" if decision == "yes" else "не удовлетворена"
+    try:
+        await bot.send_message(
+            com.user_id,
+            "Ваша жалоба обработана.\n"
+            f"Нарушение: {getattr(com, 'violetion', '—')}\n"
+            f"Описание: {getattr(com, 'description', '—')}\n"
+            f"Решение: {verdict_text}"
+        )
+    except Exception:
+        # If user blocked the bot / chat unavailable, don't break the reviewer flow
+        pass
+
 
 @router.callback_query(lambda c: c.data in ("yes", "no"), ComplaintReview.main)
 async def process_complaint_from_main(callback_query: CallbackQuery, state: FSMContext):
@@ -229,8 +243,12 @@ async def show_profile(callback_query: CallbackQuery, state: FSMContext):
                 s += 'На: ' + com.adresat + '\n'
                 s += com.description
             await callback_query.message.answer()
+        case "entertainment":
+            await state.set_state(MainMenu.student_entertainment)
+            await callback_query.message.answer("Развлечения.", reply_markup=get_student_entertainment_keyboard())
         case "help":
-            await callback_query.message.answer("не ну рейтинг пиздатая штука, но ты не думай даже разбираться", reply_markup=get_profile_keyboard())
+            await callback_query.message.answer("Помощь.", reply_markup=get_student_help_keyboard())
+            await state.set_state(MainMenu.student_help)
 
 @router.callback_query(MainMenu.main_menu_organizer)
 async def show_main_organizer(callback_query: CallbackQuery, state: FSMContext):
@@ -277,7 +295,7 @@ async def show_main_rpg_organizer(callback_query: Message, state: FSMContext):
             await callback_query.message.answer("Профиль РПГ-организатора.", reply_markup=get_profile_keyboard())
             await state.set_state(MainMenu.profile)
 
-        case "shop":
+        case "entertainment":
             await callback_query.message.answer("Магазин.\n(Здесь будет магазин для РПГ-организаторов.)")
 
         case "operations_with_participants":
@@ -408,6 +426,45 @@ async def show_main_chief_organizer(callback_query: Message, state: FSMContext):
         case "help":
             await callback_query.message.answer("Помощь.\n(Здесь будет справка для главного организатора.)")
 
+        case _:
+            await callback_query.message.answer("Команда не распознана.")
+
+"""STUDENT ENTERTAINMENT"""
+
+@router.callback_query(MainMenu.student_entertainment)
+async def show_student_entertainment(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Участник":
+        return
+    match data:
+        case "shop":
+            await callback_query.message.answer("Магазин.", reply_markup=get_student_entertainment_keyboard())
+        case "tasks":
+            await callback_query.message.answer("Задания.", reply_markup=get_student_entertainment_keyboard())
+        case "zags":
+            await callback_query.message.answer("ЗАГС.", reply_markup=get_student_entertainment_keyboard())
+        case "back_to_main_menu":
+            await show_main_menu(callback_query.bot, user_id, state)
+        case _:
+            await callback_query.message.answer("Команда не распознана.")
+
+"""STUDENT HELP"""
+@router.callback_query(MainMenu.student_help)
+async def show_student_help(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Участник":
+        return
+    match data:
+        case "rules":
+            await callback_query.message.answer("Правила и обязанности участника.", reply_markup=get_student_help_keyboard())
+        case "help_in_work":
+            await callback_query.message.answer("Помощь по работе с ботом.", reply_markup=get_student_help_keyboard())
+        case "back_to_main_menu":
+            await show_main_menu(callback_query.bot, user_id, state)
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
