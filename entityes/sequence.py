@@ -16,6 +16,7 @@ class MainMenu(StatesGroup):
     main_menu_chief_organizer = State()
     profile = State()
     complaint = State()
+    users = State()
 
 class ComplaintProcess(StatesGroup):
     waiting_for_complaint_text = State()
@@ -32,3 +33,9 @@ class YesNoChoice(StatesGroup):
 class ComplaintReview(StatesGroup):
     stat = State()
     safe = State()
+    main = State()
+
+class UserDataEdit(StatesGroup):
+    waiting_for_badge_number = State()
+    waiting_for_change_choice = State()
+    waiting_for_new_value = State()

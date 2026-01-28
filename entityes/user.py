@@ -17,32 +17,11 @@ class User:
             return False
         
         return other.fio == self.fio and self.badge_number == other.badge_number
-
-@dataclass
-class Role:
-    name: str
-    description: str
-    acseess_to_complains: bool
-    acseess_to_reports: bool
-    acseess_to_files: bool
-    acseess_change_to_teams: bool
-
-ORGANIZER = Role(
-    name="Организатор",
-    description="Полный доступ ко всем функциям бота.",
-    acseess_to_complains=True,
-    acseess_to_reports=True,
-    acseess_to_files=True,
-    acseess_change_to_teams=False
-)
-
-RATING_TEAM = Role(
-    name="Рейтинг Команды",
-    description="Доступ к просмотру и управлению рейтингом команды.",
-    acseess_to_complains=True,
-    acseess_to_reports=True,
-    acseess_to_files=False,
-    acseess_change_to_teams=False
-)
-
-
+    
+    def update(self, new_user: 'User'):
+        self.fio = new_user.fio
+        self.team_number = new_user.team_number
+        self.role = new_user.role
+        self.badge_number = new_user.badge_number
+        self.reiting = new_user.reiting
+        self.balance = new_user.balance

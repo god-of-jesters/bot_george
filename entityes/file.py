@@ -1,8 +1,9 @@
 from datetime import datetime
 
 class File:
-    def __init__(self, id: int, tg_id: int, tg_file_id: str, complaint_id: int = None, file_name: str = None, mime_type: str = None, file_size: int = None, date_created: str = None):
-        self.file_id = id
+    def __init__(self, id=None, tg_id=None, tg_file_id=None, complaint_id=None,
+                 file_name=None, mime_type=None, file_size=None, date_created=None):
+        self.id = id
         self.tg_id = tg_id
         self.tg_file_id = tg_file_id
         self.complaint_id = complaint_id

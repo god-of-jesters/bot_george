@@ -186,3 +186,23 @@ def get_agree_disagree_keyboard():
     kb.button(text="Оспорить", callback_data="disagree")
     kb.adjust(1)
     return kb.as_markup()
+
+def get_users_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Все участники", callback_data="all_users")
+    kb.button(text='Изменить данные участника', callback_data="edit_user_data")
+    kb.button(text="Назад в главное меню", callback_data="back_to_main_menu")
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_edit_badge_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="ФИО", callback_data=f"fio")
+    kb.button(text="Команда", callback_data=f"team_number")
+    kb.button(text="Роль", callback_data=f"role")
+    kb.button(text="Номер бейджа", callback_data=f"badge_number")
+    kb.button(text="Рейтинг", callback_data=f"reiting")
+    kb.button(text="Баланс", callback_data=f"balance")
+    kb.button(text="Назад", callback_data="edit_user_back")
+    kb.adjust(1)
+    return kb.as_markup()

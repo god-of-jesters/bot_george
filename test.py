@@ -27,10 +27,16 @@ async def add():
     print("Team added")
 
 
-async def show_all():
+async def show_all_files():
     async with aiosqlite.connect(DB_PATH) as db:
-        c = await db.execute("SELECT * FROM active")
+        c = await db.execute("SELECT * FROM files")
         r = await c.fetchall()
-        print([i[0] for i in r])
-        
+        print(r)
+
+async def show_all_complaints():
+    async with aiosqlite.connect(DB_PATH) as db:
+        c = await db.execute("SELECT * FROM complaints")
+        r = await c.fetchall()
+        print(r)
+
 asyncio.run(add())

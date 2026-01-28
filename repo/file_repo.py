@@ -5,12 +5,21 @@ from entityes.file import File
 async def add_file(file: File):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("""
-        INSERT INTO files (tg_id, tg_file_id, complaint_id, file_name, mime_type, file_size)
-        VALUES (?, ?, ?, ?, ?, ?);
-        """, (file.tg_id, file.tg_file_id, file.complaint_id, file.file_name, file.mime_type, file.file_size))
-        file.file_id = cursor.lastrowid
+            INSERT INTO files (tg_id, tg_file_id, complaint_id, file_name, mime_type, file_size)
+            VALUES (?, ?, ?, ?, ?, ?);
+        """, (
+            file.tg_id,
+            file.tg_file_id,
+            file.complaint_id,
+            file.file_name,
+            file.mime_type,
+            file.file_size
+        ))
+
+        file.id = cursor.lastrowid
         await db.commit()
-        FILES[file.file_id] = file
+        FILES[file.id] = file
+        return cursor.lastrowid
 
 async def get_file(file_id: int) -> File | None:
     if file_id in FILES:
@@ -28,9 +37,9 @@ async def update_file(file: File):
         UPDATE files
         SET tg_file_id = ?, complaint_id = ?, file_name = ?, mime_type = ?, file_size = ?
         WHERE id = ?;
-        """, (file.tg_file_id, file.complaint_id, file.file_name, file.mime_type, file.file_size, file.file_id))
+        """, (file.tg_file_id, file.complaint_id, file.file_name, file.mime_type, file.file_size, file.tg_file_id))
         await db.commit()
-        FILES[file.file_id] = file
+        FILES[file.tg_file_id] = file
 
 async def delete_file(file_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -63,11 +72,9 @@ async def get_files_by_complaint_id(complaint_id: int):
 async def link_files_to_complaint(complaint_id: int, file_ids: list[int]) -> None:
     if not file_ids:
         return
-
-    placeholders = ",".join("?" for _ in file_ids)
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute(
-            f"UPDATE files SET complaint_id = ? WHERE id IN ({placeholders})",
-            (complaint_id, *file_ids)
+        await db.executemany(
+            "UPDATE files SET complaint_id = ? WHERE id = ?;",
+            [(complaint_id, fid) for fid in file_ids],
         )
         await db.commit()
