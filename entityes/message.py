@@ -5,14 +5,12 @@ class Message:
         self,
         id: int = None,
         user_id: int = None,
-        adresat: int = None,
         text: str = None,
         status: str = "new",
         date_created: str = None
     ):
         self.id = id
         self.user_id = user_id
-        self.adresat = adresat
         self.text = text
         self.status = status if status in ("new", "answered") else "new"
         self.date_created = (

@@ -19,6 +19,7 @@ class MainMenu(StatesGroup):
     users = State()
     student_entertainment = State()
     student_help = State()
+    message_to_admin = State()
 
 class ComplaintProcess(StatesGroup):
     waiting_for_complaint_text = State()
@@ -41,3 +42,6 @@ class UserDataEdit(StatesGroup):
     waiting_for_badge_number = State()
     waiting_for_change_choice = State()
     waiting_for_new_value = State()
+
+class Mailing(StatesGroup):
+    waiting_for_mailing_text = State()

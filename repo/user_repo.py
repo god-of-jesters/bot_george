@@ -119,3 +119,12 @@ async def get_roles_stats_message() -> str:
         lines.append(f"{title}: {n} | активные: {g}")
 
     return "\n".join(lines)
+
+async def get_participants_tg_ids(exclude_tg_id: int) -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT tg_id FROM users WHERE role = ? AND tg_id != ?;",
+            ("Участник", exclude_tg_id),
+        )
+        rows = await cursor.fetchall()
+    return [r[0] for r in rows]

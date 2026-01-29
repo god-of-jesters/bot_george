@@ -14,6 +14,7 @@ from repo.team_repo import *
 from repo.user_repo import *
 from repo.file_repo import *
 from repo.complaint_repo import *
+from repo.message_repo import *
 from entityes.sequence import *
 from entityes.logger import *
 
@@ -59,15 +60,16 @@ async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint"
     fine = violetion_vines.get(com.violetion, 0)
 
     if decision == "yes":
-        adr_user.reiting -= fine
-        await update_user(adr_user)
-        await bot.send_message(
-            adr_user.user_id,
-            f"На вас пришла новая жалоба. Снято {fine} единиц рейтинга.\n"
-            f"Время жалобы: {com.date_created}.\n"
-            f"Описание: {com.description}"
-        )
-        com.execution = "done"
+        if adr_user.role == "Участник":
+            adr_user.reiting -= fine
+            await update_user(adr_user)
+            await bot.send_message(
+                adr_user.user_id,
+                f"На вас пришла новая жалоба. Снято {fine} единиц рейтинга.\n"
+                f"Время жалобы: {com.date_created}.\n"
+                f"Описание: {com.description}"
+            )
+            com.execution = "done"
     else:
         await bot.send_message(
             adr_user.user_id,  
@@ -249,6 +251,11 @@ async def show_profile(callback_query: CallbackQuery, state: FSMContext):
         case "help":
             await callback_query.message.answer("Помощь.", reply_markup=get_student_help_keyboard())
             await state.set_state(MainMenu.student_help)
+        case "message_to_admin":
+            await callback_query.message.answer("Напишите ваше сообщение администрации.")
+            await state.set_state(MainMenu.message_to_admin)
+        case _:
+            await callback_query.message.answer("Команда не распознана.")
 
 @router.callback_query(MainMenu.main_menu_organizer)
 async def show_main_organizer(callback_query: CallbackQuery, state: FSMContext):
@@ -372,6 +379,7 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
                 await callback_query.message.answer(f'Пока что нет жалоб.')
                 await state.set_state(MainMenu.main_menu_rating_team)
                 await show_main_menu(callback_query.bot, user_id, state)
+
         case "participants":
             mes = await get_roles_stats_message()
             await callback_query.message.answer(mes, reply_markup=get_users_keyboard())
@@ -384,7 +392,8 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
             await callback_query.message.answer("Входящие сообщения.\n")
 
         case "mailing":
-            await callback_query.message.answer("Рассылка.\n")
+            await callback_query.message.answer("Введите текст рассылки.\n")
+            await state.set_state(Mailing.waiting_for_mailing_text)
 
         case "security":
             await callback_query.message.answer("Безопастность.\n(Здесь будет модуль безопасности.)")
@@ -429,7 +438,7 @@ async def show_main_chief_organizer(callback_query: Message, state: FSMContext):
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
-"""STUDENT ENTERTAINMENT"""
+"""STUDENT MENU"""
 
 @router.callback_query(MainMenu.student_entertainment)
 async def show_student_entertainment(callback_query: CallbackQuery, state: FSMContext):
@@ -440,17 +449,16 @@ async def show_student_entertainment(callback_query: CallbackQuery, state: FSMCo
         return
     match data:
         case "shop":
-            await callback_query.message.answer("Магазин.", reply_markup=get_student_entertainment_keyboard())
+            await callback_query.message.answer("Магазин.", reply_markup=get_student_shop_keyboard())
         case "tasks":
-            await callback_query.message.answer("Задания.", reply_markup=get_student_entertainment_keyboard())
+            await callback_query.message.answer("Задания.", reply_markup=get_student_tasks_keyboard())
         case "zags":
-            await callback_query.message.answer("ЗАГС.", reply_markup=get_student_entertainment_keyboard())
+            await callback_query.message.answer("ЗАГС.", reply_markup=get_student_zags_keyboard())
         case "back_to_main_menu":
             await show_main_menu(callback_query.bot, user_id, state)
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
-"""STUDENT HELP"""
 @router.callback_query(MainMenu.student_help)
 async def show_student_help(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
@@ -460,13 +468,20 @@ async def show_student_help(callback_query: CallbackQuery, state: FSMContext):
         return
     match data:
         case "rules":
-            await callback_query.message.answer("Правила и обязанности участника.", reply_markup=get_student_help_keyboard())
+            await callback_query.message.answer("Правила и обязанности участника.")
         case "help_in_work":
-            await callback_query.message.answer("Помощь по работе с ботом.", reply_markup=get_student_help_keyboard())
-        case "back_to_main_menu":
-            await show_main_menu(callback_query.bot, user_id, state)
+            await callback_query.message.answer("Помощь по работе с ботом.")
         case _:
             await callback_query.message.answer("Команда не распознана.")
+    await show_main_menu(callback_query.bot, user_id, state)
+
+@router.message(MainMenu.message_to_admin)
+async def process_message_to_admin(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    message_text = message.text
+    await add_message(Message(user_id=user_id, text=message_text))
+    await message.answer("Ваше сообщение отправлено администрации. Спасибо.")
+    await show_main_menu(message.bot, user_id, state)
 
 """COMPLAINTS"""
 
@@ -958,6 +973,36 @@ async def process_fio(message: Message, state: FSMContext):
     await add_active(user_id, active_sessions[user_id].role)
     await show_main_menu(message.bot, user_id, state)
 
+"""MAILING"""
+@router.message(Mailing.waiting_for_mailing_text)
+async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
+    user_id = message.from_user.id
+    if active_sessions[user_id].role != 'Команда рейтинга':
+        await state.clear()
+        await message.answer("Нет доступа.")
+        return
+
+    text = 'Общая рассылка от организаторов\n\n' + (message.text or "").strip()
+    if not text:
+        await message.answer("Введите текст рассылки.")
+        return
+
+    recipients = await get_participants_tg_ids(exclude_tg_id=user_id)
+
+    sent = 0
+    failed = 0
+
+    for tg_id in recipients:
+        try:
+            await bot.send_message(tg_id, text)
+            sent += 1
+        except Exception:
+            failed += 1
+
+    await state.set_state(MainMenu.main_menu_rating_team)
+    await message.answer(f"Рассылка завершена. Отправлено: {sent}. Ошибок: {failed}.")
+    await show_main_menu(message.bot, message.from_user.id, state)
+
 async def start_handler(message: Message, state: FSMContext):
     user_id = message.from_user.id
     active = await get_active_users()
@@ -1062,6 +1107,7 @@ async def notify_persone(bot: Bot, complaint: "Complaint", state: FSMContext):
                 await bot.send_photo(complaint.adresat, tg_file_id)
 
     fine = violetion_vines.get(complaint.violetion, 0)
+    adr = await get_user_by_badge(complaint.adresat)
 
     if fr.badge_number < 100:
         await bot.send_message(
@@ -1075,15 +1121,25 @@ async def notify_persone(bot: Bot, complaint: "Complaint", state: FSMContext):
         adr_user.reiting -= fine
         await update_user(adr_user)
     else:
-        await bot.send_message(
-            complaint.adresat,
-            "На вас пришла новая жалоба от участника.\n"
-            f"Время жалобы: {complaint.date_created}.\n"
-            f"Категория жалобы: {complaint.violetion}.\n"
-            f"Штраф: {fine}.\n"
-            f"Описание: {complaint.description}",
-            reply_markup=get_agree_disagree_keyboard()
-        )
+        if adr.role == 'Участник':
+            await bot.send_message(
+                complaint.adresat,
+                "На вас пришла новая жалоба от участника.\n"
+                f"Время жалобы: {complaint.date_created}.\n"
+                f"Категория жалобы: {complaint.violetion}.\n"
+                f"Штраф: {fine}.\n"
+                f"Описание: {complaint.description}",
+                reply_markup=get_agree_disagree_keyboard()
+            )
+        else:
+            await bot.send_message(
+                complaint.adresat,
+                "На вас пришла новая жалоба от участника.\n"
+                f"Время жалобы: {complaint.date_created}.\n"
+                f"Категория жалобы: {complaint.violetion}.\n"
+                f"Штраф: {fine}.\n"
+                f"Описание: {complaint.description}",
+            )
 
 async def main():
     global bot_instance

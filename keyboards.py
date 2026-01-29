@@ -23,9 +23,9 @@ def get_main_menu_student_keyboard():
     keyboard.button(text="Подать жалобу", callback_data="complaint")
     keyboard.button(text="Мои жалобы", callback_data="my_complaints")
     keyboard.button(text="Развлечения", callback_data="entertainment")
-    keyboard.button(text="Задать вопрос", callback_data="ask_question")
+    keyboard.button(text="Обращение к администрации", callback_data="message_to_admin")
     keyboard.button(text="Помощь", callback_data="help")
-    keyboard.adjust(2)
+    keyboard.adjust(1)
     return keyboard.as_markup()
 
 def get_profile_keyboard():
@@ -220,6 +220,34 @@ def get_student_help_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text='Правила и обязанности участника', callback_data='rules')
     kb.button(text='Помощь по работе с ботом', callback_data='help_in_work')
+    kb.button(text='Назад', callback_data='back_to_main_menu')
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_main_menu_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Главное меню', callback_data='main_menu')
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_student_shop_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Купить себе', callback_data='buy_for_myself')
+    kb.button(text='Подарить', callback_data='give_to_friend')
+    kb.button(text='Назад', callback_data='back_to_main_menu')
+    kb.adjust(2)
+    return kb.as_markup()
+
+def get_student_tasks_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Задания', callback_data='tasks')
+    kb.button(text='Назад', callback_data='back_to_main_menu')
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_student_zags_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='ЗАГС', callback_data='zags')
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(1)
     return kb.as_markup()

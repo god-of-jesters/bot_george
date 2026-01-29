@@ -13,6 +13,7 @@ TEAMS = {}
 COMPLAINTS = {}
 PRODUCTS = {}
 PRODUCT_NAME_INDEX = {}
+MESSAGES = {}
 
 
 async def init_db():
@@ -102,6 +103,18 @@ async def init_db():
             tg_file_id TEXT,
             solution TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            adresat INTEGER NOT NULL,
+            text TEXT,
+            status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'answered')),
+            date_created TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(tg_id) ON DELETE CASCADE
         );
         """)
 
