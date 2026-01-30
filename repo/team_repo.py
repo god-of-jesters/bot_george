@@ -93,7 +93,7 @@ async def recalc_team_totals():
             SELECT team_id, SUM(total_points) AS s
             FROM ratings
             WHERE team_id IS NOT NULL
-            GROUP BY team_number
+            GROUP BY team_id
             """
         )
         team_sums = await cur.fetchall()
@@ -101,9 +101,9 @@ async def recalc_team_totals():
         now = now_iso()
         await db.executemany(
             """
-            INSERT INTO ratingteams (team_id, team_name, team_total_points, updated_at)
-            VALUES (?, COALESCE((SELECT team_name FROM ratingteams WHERE team_id = ?), ''), ?, ?)
-            ON CONFLICT(team_id) DO UPDATE SET
+            INSERT INTO ratingteams (team_number, team_name, team_total_points, updated_at)
+            VALUES (?, COALESCE((SELECT team_name FROM ratingteams WHERE team_number = ?), ''), ?, ?)
+            ON CONFLICT(team_number) DO UPDATE SET
                 team_total_points=excluded.team_total_points,
                 updated_at=excluded.updated_at
             """,
