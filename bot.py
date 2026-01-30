@@ -801,7 +801,7 @@ async def process_users_callback(callback_query: CallbackQuery, state: FSMContex
             await callback_query.message.answer(mes, reply_markup=get_users_keyboard())
 
 @router.message(UserDataEdit.waiting_for_badge_number)
-async def process_user_data_badge(message: Message, state: FSMContext):
+async def process_user_data_badge(message: Message, state: FSMContext): 
     user_id = message.from_user.id
     if not message.text.isdigit():
         await message.answer("Номер должен быть числом, введите еще раз")
