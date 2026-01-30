@@ -1028,15 +1028,21 @@ def _parse_text(v):
         return ""
     return str(v).strip()
 
+def _read_csv_rows(text: str, delimiter: str) -> list[list[str]]:
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    return [r for r in reader if any(str(x).strip() for x in r)]
+
+
 def _rows_from_csv_bytes(data: bytes) -> list[dict]:
     text = data.decode("utf-8-sig", errors="replace")
-    reader = csv.reader(io.StringIO(text), delimiter=";")
-    all_rows = [r for r in reader if any(str(x).strip() for x in r)]
+    all_rows = _read_csv_rows(text, ";")
     if not all_rows:
         return []
+    if all(len(r) <= 1 for r in all_rows) and "," in text:
+        all_rows = _read_csv_rows(text, ",")
 
     header = [c.strip() for c in all_rows[0]]
-    expected = ["badge_id", "full_name", "team_id", "daily_base", "penalties_sum", "bonuses_sum", "total_points", "updated_at"]
+    expected = ["badge_number", "full_name", "team_id", "daily_base", "penalties_sum", "bonuses_sum", "total_points", "updated_at"]
 
     has_header = False
     if len(header) >= 7:
@@ -1049,15 +1055,15 @@ def _rows_from_csv_bytes(data: bytes) -> list[dict]:
 
     for r in all_rows[start_idx:]:
         r = list(r) + [""] * (8 - len(r))
-        badge_id = _parse_int(r[0], default=-1)
-        if badge_id <= 0:
+        badge_number = _parse_int(r[0], default=-1)
+        if badge_number <= 0:
             continue
 
         updated_at = _parse_text(r[7]) or now_iso()
 
         rows.append(
             {
-                "badge_id": badge_id,
+                "badge_number": badge_number,
                 "full_name": _parse_text(r[1]),
                 "team_id": _parse_int(r[2], default=None),
                 "daily_base": _parse_int(r[3], default=100),
@@ -1123,7 +1129,7 @@ async def export_reiting(message: Message):
         await db.execute("PRAGMA foreign_keys=ON;")
         cur = await db.execute(
             """
-            SELECT badge_id, full_name, team_id, daily_base,
+            SELECT badge_number, full_name, team_id, daily_base,
                    penalties_sum, bonuses_sum, total_points, updated_at
             FROM ratings
             ORDER BY team_id, total_points DESC, full_name
@@ -1132,12 +1138,12 @@ async def export_reiting(message: Message):
         rows = await cur.fetchall()
 
     output = io.StringIO()
-    writer = csv.writer(output, delimiter=",", lineterminator="\n")
-    writer.writerow(["badge_id", "full_name", "team_id", "daily_base", "penalties_sum", "bonuses_sum", "total_points", "updated_at"])
+    writer = csv.writer(output, delimiter=";", lineterminator="\n")
+    writer.writerow(["badge_number", "full_name", "team_id", "daily_base", "penalties_sum", "bonuses_sum", "total_points", "updated_at"])
     for r in rows:
         writer.writerow(
             [
-                r["badge_id"],
+                r["badge_number"],
                 r["full_name"],
                 r["team_id"] if r["team_id"] is not None else "",
                 r["daily_base"],
