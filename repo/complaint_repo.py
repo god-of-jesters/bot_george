@@ -84,7 +84,13 @@ async def get_user_complaints(user_id: int) -> list[Complaint]:
         cursor = await db.execute("SELECT * FROM complaints WHERE user_id=?", (user_id))
         row = await cursor.fetchall()
         return [Complaint(row[0], )]
-    
+
+async def get_room_problems() -> list[Complaint]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute('SELECT * FROM complaints WHERE status = "room_problems"')
+        rows = await cursor.fetchall()
+    return rows
+
 async def get_oldest_complaint() -> Complaint:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
