@@ -114,13 +114,20 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            adresat INTEGER NOT NULL,
+            adresat TEXT NOT NULL,
+            badge_number INTEGER NOT NULL DEFAULT 0,
             text TEXT,
             status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'answered')),
             date_created TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(tg_id) ON DELETE CASCADE
         );
         """)
+        cursor = await db.execute("PRAGMA table_info(messages);")
+        message_columns = {row[1] for row in await cursor.fetchall()}
+        if "badge_number" not in message_columns:
+            await db.execute(
+                "ALTER TABLE messages ADD COLUMN badge_number INTEGER NOT NULL DEFAULT 0;"
+            )
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS ratings (

@@ -6,12 +6,13 @@ async def add_message(message: Message):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             """
-            INSERT INTO messages (user_id, adresat, text, status, date_created)
-            VALUES (?, ?, ?, ?, ?);
+            INSERT INTO messages (user_id, adresat, badge_number, text, status, date_created)
+            VALUES (?, ?, ?, ?, ?, ?);
             """,
             (
                 message.user_id,
                 message.adresat,
+                message.badge_number,
                 message.text,
                 message.status,
                 message.date_created,
@@ -29,7 +30,7 @@ async def get_message(message_id: int) -> Message | None:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             """
-            SELECT id, user_id, adresat, text, status, date_created
+            SELECT id, user_id, adresat, badge_number, text, status, date_created
             FROM messages
             WHERE id = ?;
             """,
@@ -41,9 +42,10 @@ async def get_message(message_id: int) -> Message | None:
                 id=row[0],
                 user_id=row[1],
                 adresat=row[2],
-                text=row[3],
-                status=row[4],
-                date_created=row[5],
+                badge_number=row[3],
+                text=row[4],
+                status=row[5],
+                date_created=row[6],
             )
             MESSAGES[message_id] = message
             return message
@@ -55,12 +57,13 @@ async def update_message(message: Message):
         await db.execute(
             """
             UPDATE messages
-            SET user_id = ?, adresat = ?, text = ?, status = ?, date_created = ?
+            SET user_id = ?, adresat = ?, badge_number = ?, text = ?, status = ?, date_created = ?
             WHERE id = ?;
             """,
             (
                 message.user_id,
                 message.adresat,
+                message.badge_number,
                 message.text,
                 message.status,
                 message.date_created,
