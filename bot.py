@@ -16,7 +16,8 @@ from repo.team_repo import *
 from repo.user_repo import *
 from repo.file_repo import *
 from repo.complaint_repo import *
-from repo.message_repo import *
+from repo.message_repo import Message as ms
+from repo.message_repo import add_message, delete_message, update_message, get_message
 from entityes.sequence import *
 from entityes.logger import *
 
@@ -336,7 +337,7 @@ async def show_main_admins(callback_query: Message, state: FSMContext):
             await state.set_state(MainMenu.profile)
 
         case "manage_rooms":
-            await callback_query.message.answer("Комнатные обращения.\n(Здесь будет модуль управления комнатами.)")
+            await callback_query.message.answer("Комнатные обращения", reply_markup=get_room_admins_complaints())
 
         case "mailing":
             await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
@@ -478,7 +479,7 @@ async def show_student_help(callback_query: CallbackQuery, state: FSMContext):
 async def process_message_to_admin(message: Message, state: FSMContext):
     user_id = message.from_user.id
     message_text = message.text
-    await add_message(Message(user_id=user_id, text=message_text))
+    await add_message(ms(user_id=user_id, text=message_text))
     await message.answer("Ваше сообщение отправлено администрации. Спасибо.")
     await show_main_menu(message.bot, user_id, state)
 
@@ -562,6 +563,10 @@ async def process_complaint_category_callback(callback_query: Message, state: FS
                 await callback_query.bot.send_message(user_id, text_alert, reply_markup=get_alert_keyboard())
             case 'soon':
                 await callback_query.bot.send_message(user_id, text_soon, reply_markup=get_soon_keyboard())
+            case 'room_problems':
+                await callback_query.bot.send_message(user_id, 'Опишите вашу проблему', reply_markup=get_soon_keyboard())
+                await state.set_state(ComplaintProcess.waiting_for_complaint_text)
+                return
             case _:
                 await callback_query.bot.send_message(user_id, text_other, reply_markup=get_other_keyboard())
         await state.set_state(ComplaintProcess.waiting_for_violation_type)
@@ -602,8 +607,9 @@ async def process_complaint_violation_type(callback_query: CallbackQuery, state:
 @router.message(ComplaintProcess.waiting_for_complaint_text)
 async def process_complaint_text(message: Message, state: FSMContext):
     user_id = message.from_user.id
+    teg = message.from_user.username
     if user_id in complaintes:
-        complaintes[user_id].description = message.text
+        complaintes[user_id].description = teg + '\n' + message.text
         await message.answer("При наличии доказательств, прикрепите их в следующем сообщении. Отправьте фото или видео, или /skip чтобы завершить без файлов.")
         await state.set_state(ComplaintProcess.waiting_for_complaint_files)
 
@@ -760,6 +766,8 @@ async def process_complaint_student(callback_query: CallbackQuery, state: FSMCon
     else:
         await callback_query.message.answer('Ваша жалоба отослана на рассмотрение команде рейтинга.')
         await show_main_menu(callback_query.bot, user_id, state)
+
+
 
 """USERS"""
 

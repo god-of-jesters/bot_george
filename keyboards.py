@@ -251,3 +251,11 @@ def get_student_zags_keyboard():
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(1)
     return kb.as_markup()
+
+def get_room_admins_complaints():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Новые', case='new')
+    kb.button(text='В работе', case='working')
+    kb.button(text='Завершенные', case='done')
+    kb.adjust(1)
+    return kb.as_markup()
