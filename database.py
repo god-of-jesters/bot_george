@@ -36,6 +36,10 @@ async def init_db():
             date_registered TEXT
         );
         """)
+        await db.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_badge_number
+        ON users(badge_number);
+        """)
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS files (
