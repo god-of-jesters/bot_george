@@ -278,10 +278,12 @@ async def show_main_organizer(callback_query: CallbackQuery, state: FSMContext):
             await callback_query.message.answer("Жалобы в работе.\n(Здесь будет очередь обращений.)")
 
         case "contact":
-            await callback_query.message.answer("Сообщить/Обратиться.\n(Здесь будет форма сообщения.)")
+            await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
+            await state.set_state(MainMenu.message_to_rating_team)
 
         case "mailing":
-            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
+            await callback_query.message.answer("Введите текст рассылки.\n")
+            await state.set_state(Mailing.waiting_for_mailing_text)
 
         case "help":
             await callback_query.message.answer("Помощь.\n(Здесь будет справка для организаторов.)")
@@ -312,10 +314,12 @@ async def show_main_rpg_organizer(callback_query: Message, state: FSMContext):
             await callback_query.message.answer("История операций.\n(Здесь будет история операций.)")
 
         case "mailing":
-            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
+            await callback_query.message.answer("Введите текст рассылки.\n")
+            await state.set_state(Mailing.waiting_for_mailing_text)
 
         case "contact":
-            await callback_query.message.answer("Сообщить/Обратиться.\n(Здесь будет форма сообщения.)")
+            await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
+            await state.set_state(MainMenu.message_to_rating_team)
 
         case "help":
             await callback_query.message.answer("Помощь.\n(Здесь будет справка для РПГ-организаторов.)")
@@ -340,13 +344,15 @@ async def show_main_admins(callback_query: Message, state: FSMContext):
             await callback_query.message.answer("Комнатные обращения", reply_markup=get_room_admins_complaints())
 
         case "mailing":
-            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
+            await callback_query.message.answer("Введите текст рассылки.\n")
+            await state.set_state(Mailing.waiting_for_mailing_text)
 
         case "activity_log":
             await callback_query.message.answer("Журнал действий.\n(Здесь будет журнал действий.)")
 
         case "contact":
-            await callback_query.message.answer("Сообщить/Обратиться.\n(Здесь будет форма сообщения.)")
+            await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
+            await state.set_state(MainMenu.message_to_rating_team)
 
         case "help":
             await callback_query.message.answer("Помощь.\n(Здесь будет справка для администраторов по комнатам.)")
@@ -479,8 +485,34 @@ async def show_student_help(callback_query: CallbackQuery, state: FSMContext):
 async def process_message_to_admin(message: Message, state: FSMContext):
     user_id = message.from_user.id
     message_text = message.text
-    await add_message(ms(user_id=user_id, text=message_text))
+    await add_message(
+        ms(
+            user_id=user_id,
+            adresat="Администраторы по комнатам",
+            badge_number=0,
+            text=message_text,
+        )
+    )
     await message.answer("Ваше сообщение отправлено администрации. Спасибо.")
+    await show_main_menu(message.bot, user_id, state)
+
+@router.message(MainMenu.message_to_rating_team)
+async def process_message_to_rating_team(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Администраторы по комнатам":
+        await show_main_menu(message.bot, user_id, state)
+        return
+    message_text = message.text
+    await add_message(
+        ms(
+            user_id=user_id,
+            adresat="Команда рейтинга",
+            badge_number=0,
+            text=message_text,
+        )
+    )
+    await message.answer("Ваше сообщение отправлено команде рейтинга. Спасибо.")
     await show_main_menu(message.bot, user_id, state)
 
 """COMPLAINTS"""
@@ -1002,7 +1034,10 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
         text = 'Общая рассылка от РПГ-организаторов'
     
     text = text + (message.text or "").strip()
-    recipients = await get_participants_tg_ids(exclude_tg_id=user_id)
+    if role == 'Администраторы по комнатам':
+        recipients = await get_participants_and_room_admins_tg_ids(exclude_tg_id=user_id)
+    else:
+        recipients = await get_participants_tg_ids(exclude_tg_id=user_id)
 
     sent = 0
     failed = 0
@@ -1014,7 +1049,6 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
         except Exception:
             failed += 1
 
-    await state.set_state(MainMenu.main_menu_rating_team)
     await message.answer(f"Рассылка завершена. Отправлено: {sent}. Ошибок: {failed}.")
     await show_main_menu(message.bot, message.from_user.id, state)
 

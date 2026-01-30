@@ -20,6 +20,7 @@ class MainMenu(StatesGroup):
     student_entertainment = State()
     student_help = State()
     message_to_admin = State()
+    message_to_rating_team = State()
 
 class ComplaintProcess(StatesGroup):
     waiting_for_complaint_text = State()
