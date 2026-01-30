@@ -1030,7 +1030,7 @@ def _parse_text(v):
 
 def _rows_from_csv_bytes(data: bytes) -> list[dict]:
     text = data.decode("utf-8-sig", errors="replace")
-    reader = csv.reader(io.StringIO(text), delimiter=",")
+    reader = csv.reader(io.StringIO(text), delimiter=";")
     all_rows = [r for r in reader if any(str(x).strip() for x in r)]
     if not all_rows:
         return []
@@ -1053,7 +1053,7 @@ def _rows_from_csv_bytes(data: bytes) -> list[dict]:
         if badge_id <= 0:
             continue
 
-        updated_at = _parse_text(r[7]) or _now_iso()
+        updated_at = _parse_text(r[7]) or now_iso()
 
         rows.append(
             {
@@ -1078,7 +1078,7 @@ async def upload_reiting_cmd(message: Message, state: FSMContext):
         await message.answer("Доступно только для роли «команда рейтинга».")
         return
     await state.set_state(RatingCSV.waiting_for_csv)
-    await message.answer("Пришли .csv файл с рейтингом (разделитель – запятая «,»).")
+    await message.answer("Пришли .csv файл с рейтингом (разделитель – запятая «;»).")
 
 
 @router.message(RatingCSV.waiting_for_csv, F.document)
@@ -1105,8 +1105,8 @@ async def upload_reiting_file(message: Message, state: FSMContext):
         await message.answer("Не нашёл валидных строк. Проверь формат файла.")
         return
 
-    n = await _upsert_rating_rows(rows)
-    await _recalc_team_totals()
+    n = await upsert_rating_rows(rows)
+    await recalc_team_totals()
     await state.clear()
     await message.answer(f"Загружено строк: {n}.")
 

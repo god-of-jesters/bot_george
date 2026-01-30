@@ -1,9 +1,10 @@
 from database import DB_PATH, TEAMS
 import aiosqlite
 from entityes.team import Team
+from datetime import datetime, timezone
 import io
 
-def _now_iso():
+def now_iso():
     return datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
 
 async def add_team(team: Team):
@@ -42,7 +43,7 @@ async def delete_team(team_number: int):
         if team_number in TEAMS:
             del TEAMS[team_number]
 
-async def _upsert_rating_rows(rows: list[dict]) -> int:
+async def upsert_rating_rows(rows: list[dict]) -> int:
     if not rows:
         return 0
 
@@ -51,11 +52,11 @@ async def _upsert_rating_rows(rows: list[dict]) -> int:
         await db.executemany(
             """
             INSERT INTO ratings (
-                badge_id, full_name, team_id, daily_base,
+                badge_number, full_name, team_id, daily_base,
                 penalties_sum, bonuses_sum, total_points, updated_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(badge_id) DO UPDATE SET
+            ON CONFLICT(badge_number) DO UPDATE SET
                 full_name=excluded.full_name,
                 team_id=excluded.team_id,
                 daily_base=excluded.daily_base,
@@ -66,7 +67,7 @@ async def _upsert_rating_rows(rows: list[dict]) -> int:
             """,
             [
                 (
-                    r["badge_id"],
+                    r["badge_number"],
                     r["full_name"],
                     r["team_id"],
                     r["daily_base"],
@@ -82,7 +83,7 @@ async def _upsert_rating_rows(rows: list[dict]) -> int:
 
     return len(rows)
 
-async def _recalc_team_totals():
+async def recalc_team_totals():
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys=ON;")
@@ -92,12 +93,12 @@ async def _recalc_team_totals():
             SELECT team_id, SUM(total_points) AS s
             FROM ratings
             WHERE team_id IS NOT NULL
-            GROUP BY team_id
+            GROUP BY team_number
             """
         )
         team_sums = await cur.fetchall()
 
-        now = _now_iso()
+        now = now_iso()
         await db.executemany(
             """
             INSERT INTO ratingteams (team_id, team_name, team_total_points, updated_at)
