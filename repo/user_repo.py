@@ -1,3 +1,4 @@
+from sqlite3 import connect
 from database import DB_PATH, USERS
 import aiosqlite
 from entityes.user import User
@@ -128,3 +129,12 @@ async def get_participants_tg_ids(exclude_tg_id: int) -> list[int]:
         )
         rows = await cursor.fetchall()
     return [r[0] for r in rows]
+
+async def get_permission_maling(badge_number: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT maling FROM permissions WHERE badge_number = ?",
+            (badge_number, )
+        )
+        row = await cursor.fetchone()
+    return True if row == 1 else False

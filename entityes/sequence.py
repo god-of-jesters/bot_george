@@ -45,3 +45,6 @@ class UserDataEdit(StatesGroup):
 
 class Mailing(StatesGroup):
     waiting_for_mailing_text = State()
+
+class RatingCSV(StatesGroup):
+    waiting_for_csv = State()

@@ -1,13 +1,15 @@
 import asyncio
 import os
+import csv
 from dotenv import load_dotenv
 from collections import defaultdict
 
-from aiogram import Bot, Dispatcher, Router
+from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
+from aiogram.types import FSInputFile
 
 from database import load_datastore, USERS, TEAMS, FILES, COMPLAINTS, PRODUCT_NAME_INDEX, PRODUCTS
 from repo.team_repo import *
@@ -93,7 +95,6 @@ async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint"
         # If user blocked the bot / chat unavailable, don't break the reviewer flow
         pass
 
-
 @router.callback_query(lambda c: c.data in ("yes", "no"), ComplaintReview.main)
 async def process_complaint_from_main(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
@@ -114,7 +115,6 @@ async def process_complaint_from_main(callback_query: CallbackQuery, state: FSMC
         await callback_query.answer("Успешно защитили человека")
 
     await show_main_menu(callback_query.bot, user_id, state)
-
 
 @router.callback_query(lambda c: c.data in ("yes", "no"), ComplaintReview.stat)
 async def process_complaint_fate(callback_query: CallbackQuery, state: FSMContext):
@@ -141,7 +141,6 @@ async def process_complaint_fate(callback_query: CallbackQuery, state: FSMContex
 
     await callback_query.message.answer("Жалоба успешно обработана.")
     await show_main_menu(callback_query.bot, user_id, state)
-
 
 @router.callback_query(lambda c: c.data in ("yes", "no"))
 async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMContext):
@@ -974,19 +973,27 @@ async def process_fio(message: Message, state: FSMContext):
     await show_main_menu(message.bot, user_id, state)
 
 """MAILING"""
+
 @router.message(Mailing.waiting_for_mailing_text)
 async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
     user_id = message.from_user.id
-    if active_sessions[user_id].role != 'Команда рейтинга':
-        await state.clear()
-        await message.answer("Нет доступа.")
+    role = active_sessions[user_id].role
+    user = await get_user(user_id)
+    if not await get_permission_maling(user.badge_number):
+        message.answer('Нет доступа к рассылке')
+        await show_main_menu(bot, user_id, state)
         return
 
-    text = 'Общая рассылка от организаторов\n\n' + (message.text or "").strip()
-    if not text:
-        await message.answer("Введите текст рассылки.")
-        return
-
+    if role == 'Команда рейтинга':
+        text = 'Общая рассылка от команды рейтинга\n\n'
+    elif role == 'Организатор':
+        text = 'Общая рассылка от организаторов'
+    elif role == 'Администраторы по комнатам':
+        text = 'Общая рассылка от организаторов'
+    elif role == 'РПГ-организаторы':
+        text = 'Общая рассылка от РПГ-организаторов'
+    
+    text = text + (message.text or "").strip()
     recipients = await get_participants_tg_ids(exclude_tg_id=user_id)
 
     sent = 0
@@ -1002,6 +1009,151 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
     await state.set_state(MainMenu.main_menu_rating_team)
     await message.answer(f"Рассылка завершена. Отправлено: {sent}. Ошибок: {failed}.")
     await show_main_menu(message.bot, message.from_user.id, state)
+
+"""UPLOAD REITING FILES"""
+
+def _parse_int(v, default=0):
+    try:
+        if v is None:
+            return default
+        s = str(v).strip()
+        if s == "":
+            return default
+        return int(float(s.replace(" ", "").replace(",", ".")))
+    except Exception:
+        return default
+
+def _parse_text(v):
+    if v is None:
+        return ""
+    return str(v).strip()
+
+def _rows_from_csv_bytes(data: bytes) -> list[dict]:
+    text = data.decode("utf-8-sig", errors="replace")
+    reader = csv.reader(io.StringIO(text), delimiter=",")
+    all_rows = [r for r in reader if any(str(x).strip() for x in r)]
+    if not all_rows:
+        return []
+
+    header = [c.strip() for c in all_rows[0]]
+    expected = ["badge_id", "full_name", "team_id", "daily_base", "penalties_sum", "bonuses_sum", "total_points", "updated_at"]
+
+    has_header = False
+    if len(header) >= 7:
+        lower = [h.lower() for h in header]
+        if all(x in lower for x in expected[:7]):
+            has_header = True
+
+    start_idx = 1 if has_header else 0
+    rows = []
+
+    for r in all_rows[start_idx:]:
+        r = list(r) + [""] * (8 - len(r))
+        badge_id = _parse_int(r[0], default=-1)
+        if badge_id <= 0:
+            continue
+
+        updated_at = _parse_text(r[7]) or _now_iso()
+
+        rows.append(
+            {
+                "badge_id": badge_id,
+                "full_name": _parse_text(r[1]),
+                "team_id": _parse_int(r[2], default=None),
+                "daily_base": _parse_int(r[3], default=100),
+                "penalties_sum": _parse_int(r[4], default=0),
+                "bonuses_sum": _parse_int(r[5], default=0),
+                "total_points": _parse_int(r[6], default=0),
+                "updated_at": updated_at,
+            }
+        )
+
+    return rows
+
+@router.message(Command("upload_reiting"))
+async def upload_reiting_cmd(message: Message, state: FSMContext):
+    user = await get_user(message.from_user.id)
+    role = user.role
+    if not role == 'Команда рейтинга':
+        await message.answer("Доступно только для роли «команда рейтинга».")
+        return
+    await state.set_state(RatingCSV.waiting_for_csv)
+    await message.answer("Пришли .csv файл с рейтингом (разделитель – запятая «,»).")
+
+
+@router.message(RatingCSV.waiting_for_csv, F.document)
+async def upload_reiting_file(message: Message, state: FSMContext):
+    user = await get_user(message.from_user.id)
+    role = user.role
+    if not role == 'Команда рейтинга':
+        await state.clear()
+        await message.answer("Доступно только для роли «команда рейтинга».")
+        return
+
+    doc = message.document
+    name = (doc.file_name or "").lower()
+    if not name.endswith(".csv"):
+        await message.answer("Нужен файл .csv.")
+        return
+
+    file = await message.bot.get_file(doc.file_id)
+    data = await message.bot.download_file(file.file_path)
+    content = data.read()
+
+    rows = _rows_from_csv_bytes(content)
+    if not rows:
+        await message.answer("Не нашёл валидных строк. Проверь формат файла.")
+        return
+
+    n = await _upsert_rating_rows(rows)
+    await _recalc_team_totals()
+    await state.clear()
+    await message.answer(f"Загружено строк: {n}.")
+
+
+@router.message(RatingCSV.waiting_for_csv)
+async def upload_reiting_wrong(message: Message):
+    await message.answer("Пришли .csv файлом (документом).")
+
+
+@router.message(Command("reiting"))
+async def export_reiting(message: Message):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys=ON;")
+        cur = await db.execute(
+            """
+            SELECT badge_id, full_name, team_id, daily_base,
+                   penalties_sum, bonuses_sum, total_points, updated_at
+            FROM ratings
+            ORDER BY team_id, total_points DESC, full_name
+            """
+        )
+        rows = await cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=",", lineterminator="\n")
+    writer.writerow(["badge_id", "full_name", "team_id", "daily_base", "penalties_sum", "bonuses_sum", "total_points", "updated_at"])
+    for r in rows:
+        writer.writerow(
+            [
+                r["badge_id"],
+                r["full_name"],
+                r["team_id"] if r["team_id"] is not None else "",
+                r["daily_base"],
+                r["penalties_sum"],
+                r["bonuses_sum"],
+                r["total_points"],
+                r["updated_at"] or "",
+            ]
+        )
+
+    filename = f"reiting_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    path = f"/tmp/{filename}"
+    with open(path, "wb") as f:
+        f.write(output.getvalue().encode("utf-8-sig"))
+
+    await message.answer_document(FSInputFile(path, filename=filename))
 
 async def start_handler(message: Message, state: FSMContext):
     user_id = message.from_user.id

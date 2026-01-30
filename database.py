@@ -118,6 +118,39 @@ async def init_db():
         );
         """)
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS ratings (
+            badge_id INTEGER PRIMARY KEY,
+            full_name TEXT NOT NULL,
+            team_id INTEGER,
+            daily_base INTEGER NOT NULL DEFAULT 100,
+            penalties_sum INTEGER NOT NULL DEFAULT 0,
+            bonuses_sum INTEGER NOT NULL DEFAULT 0,
+            total_points INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT,
+            FOREIGN KEY (badge_id) REFERENCES users(badge_number)
+        );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS ratingteams (
+            team_id INTEGER PRIMARY KEY,
+            team_name TEXT NOT NULL,
+            team_total_points INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS permissions(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            badge_number INTEGER NOT NULL,
+            mailing INTEGER,
+            FOREIGN KEY (badge_number) REFERENCES users(badge_number)
+        );
+        """)
+
         await db.commit()
 
 
