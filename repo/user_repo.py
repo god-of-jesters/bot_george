@@ -81,9 +81,9 @@ async def get_roles_stats_message() -> str:
         "participant": "Участники",
         "organizer": "Организаторы",
         "rating_team": "Команда рейтинга",
-        "rpg_organizers": "РПГ-организаторы",
+        "rpg_organizers": "РПГ",
         "room_administrators": "Администраторы по комнатам",
-        "media_team": "Команда медиа",
+        "media_team": "Медиа",
         "chief_organizer": "Главный организатор",
     }
     

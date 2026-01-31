@@ -197,19 +197,25 @@ async def main_menu_callback(message: Message, state: FSMContext):
     match active_sessions[user_id].role:
             case "Участник":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
+                await state.set_state(MainMenu.main_menu_student)
             case "Организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
-            case "РПГ-организаторы":
+                await state.set_state(MainMenu.main_menu_organizer)
+            case "РПГ":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
+                await state.set_state(MainMenu.main_menu_rpg_organizer) 
             case "Администраторы по комнатам":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_admins_keyboard())
+                await state.set_state(MainMenu.main_menu_admins)
             case "Команда рейтинга":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
-            case "Команда медиа":
+                await state.set_state(MainMenu.main_menu_rating_team) 
+            case "Медиа":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
+                await state.set_state(MainMenu.main_menu_media_team)
             case "Главный организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
-    await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_chief_organizer)
 
 @router.message(Command("teg"))
 async def cmd_teg(message: Message):
@@ -296,7 +302,7 @@ async def show_main_rpg_organizer(callback_query: Message, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
     role = getattr(active_sessions.get(user_id), "role", None)
-    if role != "РПГ-организаторы":
+    if role != "РПГ":
         return
 
     match data:
@@ -924,7 +930,7 @@ async def process_user_new_value(message: Message, state: FSMContext):
                 return
             user.team_number = int(value)
         case "role":
-            if value.lower() not in ["участник", "организатор", "рпг-организатор", "администратор по комнатам", "команда рейтинга", "команда медиа", "главный организатор"]:
+            if value.lower() not in ["участник", "организатор", "рпг-организатор", "администратор по комнатам", "команда рейтинга", "Медиа", "главный организатор"]:
                 await message.answer("Неверная роль, введите еще раз.")
                 return
             user.role = value
@@ -1019,19 +1025,19 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
     user_id = message.from_user.id
     role = active_sessions[user_id].role
     user = await get_user(user_id)
-    if not await get_permission_maling(user.badge_number):
-        message.answer('Нет доступа к рассылке')
-        await show_main_menu(bot, user_id, state)
-        return
+#    if not await get_permission_maling(user.badge_number):
+#       message.answer('Нет доступа к рассылке')
+#       await show_main_menu(bot, user_id, state)
+#       return
 
     if role == 'Команда рейтинга':
         text = 'Общая рассылка от команды рейтинга\n\n'
     elif role == 'Организатор':
-        text = 'Общая рассылка от организаторов'
+        text = 'Общая рассылка от организаторов\n\n'
     elif role == 'Администраторы по комнатам':
-        text = 'Общая рассылка от организаторов'
-    elif role == 'РПГ-организаторы':
-        text = 'Общая рассылка от РПГ-организаторов'
+        text = 'Общая рассылка от администраторов комнат\n\n'
+    elif role == 'РПГ':
+        text = 'Общая рассылка от РПГ-организаторов\n\n'
     
     text = text + (message.text or "").strip()
     if role == 'Администраторы по комнатам':
@@ -1249,7 +1255,7 @@ async def show_main_menu(bot: Bot, user_id: int, state: FSMContext):
             case "Организатор":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
                 await state.set_state(MainMenu.main_menu_organizer)
-            case "РПГ-организаторы":
+            case "РПГ":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
                 await state.set_state(MainMenu.main_menu_rpg_organizer)
             case "Администраторы по комнатам":
@@ -1258,7 +1264,7 @@ async def show_main_menu(bot: Bot, user_id: int, state: FSMContext):
             case "Команда рейтинга":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
                 await state.set_state(MainMenu.main_menu_rating_team)
-            case "Команда медиа":
+            case "Медиа":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
                 await state.set_state(MainMenu.main_menu_media_team)
             case "Главный организатор":

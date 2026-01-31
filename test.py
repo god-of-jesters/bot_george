@@ -39,4 +39,10 @@ async def show_all_complaints():
         r = await c.fetchall()
         print(r)
 
-asyncio.run(add())
+async def show_all_reiting():
+    async with aiosqlite.connect(DB_PATH) as db:
+        c = await db.execute("SELECT * FROM ratings")
+        r = await c.fetchall()
+        print(r)
+
+asyncio.run(show_all_reiting())
