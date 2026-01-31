@@ -110,3 +110,32 @@ async def recalc_team_totals():
             [(row["team_id"], row["team_id"], int(row["s"] or 0), now) for row in team_sums],
         )
         await db.commit()
+
+async def upsert_rating_team_rows(rows: list[dict]) -> int:
+    if not rows:
+        return 0
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("PRAGMA foreign_keys=ON;")
+        await db.executemany(
+            """
+            INSERT INTO ratingteams (team_number, team_name, team_total_points, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(team_number) DO UPDATE SET
+                team_name=excluded.team_name,
+                team_total_points=excluded.team_total_points,
+                updated_at=excluded.updated_at
+            """,
+            [
+                (
+                    r["team_number"],
+                    r["team_name"],
+                    r["team_total_points"],
+                    r["updated_at"],
+                )
+                for r in rows
+            ],
+        )
+        await db.commit()
+
+    return len(rows)
