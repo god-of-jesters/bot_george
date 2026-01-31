@@ -1305,19 +1305,7 @@ async def upload_reiting_file(message: Message, state: FSMContext):
         if not rows:
             await message.answer("Не нашёл валидных строк. Проверь формат файла.")
             return
-        for row in rows:
-            await add_user(
-                User(
-                    user_id=row["user_id"],
-                    fio=row["fio"],
-                    team_number=row["team_number"],
-                    role=row["role"],
-                    badge_number=row["badge_number"],
-                    reiting=row["reiting"],
-                    balance=row["balance"],
-                    date_registered=row["date_registered"],
-                )
-            )
+        n = await upsert_users_rows(rows)
 
     await state.clear()
     await message.answer(f"Загружено строк: {n}.")
