@@ -1,6 +1,9 @@
 import asyncio
 import os
 import csv
+import io
+from datetime import datetime
+import aiosqlite
 from dotenv import load_dotenv
 from collections import defaultdict
 
@@ -1052,7 +1055,16 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
     await message.answer(f"Рассылка завершена. Отправлено: {sent}. Ошибок: {failed}.")
     await show_main_menu(message.bot, message.from_user.id, state)
 
-"""UPLOAD REITING FILES"""
+"""UPLOAD/EXPORT CSV FILES"""
+
+UPLOAD_RATING_PARTICIPANTS = "upload_rating_participants"
+UPLOAD_RATING_TEAMS = "upload_rating_teams"
+UPLOAD_PARTICIPANTS = "upload_participants"
+
+EXPORT_RATING_PARTICIPANTS = "export_rating_participants"
+EXPORT_RATING_TEAMS = "export_rating_teams"
+EXPORT_PARTICIPANTS = "export_participants"
+EXPORT_LOGS = "export_logs"
 
 def _parse_int(v, default=0):
     try:
@@ -1118,6 +1130,98 @@ def _rows_from_csv_bytes(data: bytes) -> list[dict]:
 
     return rows
 
+def _rows_from_rating_teams_csv_bytes(data: bytes) -> list[dict]:
+    text = data.decode("utf-8-sig", errors="replace")
+    all_rows = _read_csv_rows(text, ";")
+    if not all_rows:
+        return []
+    if all(len(r) <= 1 for r in all_rows) and "," in text:
+        all_rows = _read_csv_rows(text, ",")
+
+    header = [c.strip().lower() for c in all_rows[0]]
+    expected = ["team_number", "team_name", "team_total_points", "updated_at"]
+    has_header = all(x in header for x in expected[:2])
+
+    start_idx = 1 if has_header else 0
+    rows = []
+
+    for r in all_rows[start_idx:]:
+        r = list(r) + [""] * (4 - len(r))
+        if has_header:
+            header_map = {name: idx for idx, name in enumerate(header)}
+            team_number = _parse_int(r[header_map.get("team_number", 0)], default=-1)
+            team_name = _parse_text(r[header_map.get("team_name", 1)])
+            team_total_points = _parse_int(r[header_map.get("team_total_points", 2)], default=0)
+            updated_at = _parse_text(r[header_map.get("updated_at", 3)]) or now_iso()
+        else:
+            team_number = _parse_int(r[0], default=-1)
+            team_name = _parse_text(r[1])
+            team_total_points = _parse_int(r[2], default=0)
+            updated_at = _parse_text(r[3]) or now_iso()
+
+        if team_number <= 0:
+            continue
+
+        rows.append(
+            {
+                "team_number": team_number,
+                "team_name": team_name,
+                "team_total_points": team_total_points,
+                "updated_at": updated_at,
+            }
+        )
+
+    return rows
+
+def _rows_from_participants_csv_bytes(data: bytes) -> list[dict]:
+    text = data.decode("utf-8-sig", errors="replace")
+    all_rows = _read_csv_rows(text, ";")
+    if not all_rows:
+        return []
+    if all(len(r) <= 1 for r in all_rows) and "," in text:
+        all_rows = _read_csv_rows(text, ",")
+
+    header = [c.strip().lower() for c in all_rows[0]]
+    expected = ["badge", "fio", "role"]
+    has_header = any(x in header for x in ("badge", "badge_number")) and "fio" in header
+    header_map = {name: idx for idx, name in enumerate(header)} if has_header else {}
+
+    start_idx = 1 if has_header else 0
+    rows = []
+
+    for r in all_rows[start_idx:]:
+        r = list(r) + [""] * (3 - len(r))
+        if has_header:
+            badge_number = _parse_int(
+                r[header_map.get("badge", header_map.get("badge_number", 0))],
+                default=-1,
+            )
+            fio = _parse_text(r[header_map.get("fio", 1)])
+            role = _parse_text(r[header_map.get("role", 2)]) or "Участник"
+        else:
+            badge_number = _parse_int(r[0], default=-1)
+            fio = _parse_text(r[1])
+            role = _parse_text(r[2]) or "Участник"
+
+        if badge_number <= 0:
+            continue
+        tg_id = badge_number
+
+        rows.append(
+            {
+                "tg_id": tg_id,
+                "fio": fio,
+                "team_number": None,
+                "role": role,
+                "badge_number": badge_number,
+                "reiting": 0,
+                "balance": 0,
+                "date_registered": now_iso(),
+            }
+        )
+
+    return rows
+
 @router.message(Command("upload_reiting"))
 async def upload_reiting_cmd(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
@@ -1125,8 +1229,30 @@ async def upload_reiting_cmd(message: Message, state: FSMContext):
     if not role == 'Команда рейтинга':
         await message.answer("Доступно только для роли «команда рейтинга».")
         return
+    await state.set_state(RatingCSV.waiting_for_upload_choice)
+    await message.answer("Выбери тип файла для загрузки.", reply_markup=get_upload_csv_keyboard())
+
+@router.callback_query(RatingCSV.waiting_for_upload_choice, lambda c: c.data in {UPLOAD_RATING_PARTICIPANTS, UPLOAD_RATING_TEAMS, UPLOAD_PARTICIPANTS})
+async def select_upload_csv_type(callback_query: CallbackQuery, state: FSMContext):
+    user = await get_user(callback_query.from_user.id)
+    role = user.role
+    if not role == 'Команда рейтинга':
+        await state.clear()
+        await callback_query.message.answer("Доступно только для роли «команда рейтинга».")
+        return
+
+    await callback_query.answer()
+    await state.update_data(upload_type=callback_query.data)
     await state.set_state(RatingCSV.waiting_for_csv)
-    await message.answer("Пришли .csv файл с рейтингом (разделитель – запятая «;»).")
+
+    if callback_query.data == UPLOAD_RATING_PARTICIPANTS:
+        prompt = "Пришли .csv файл с рейтингом участников (разделитель – «;»)."
+    elif callback_query.data == UPLOAD_RATING_TEAMS:
+        prompt = "Пришли .csv файл с рейтингом команд (team_number; team_name; team_total_points; updated_at)."
+    else:
+        prompt = "Пришли .csv файл с участниками (badge; fio; role)."
+
+    await callback_query.message.answer(prompt)
 
 
 @router.message(RatingCSV.waiting_for_csv, F.document)
@@ -1148,13 +1274,32 @@ async def upload_reiting_file(message: Message, state: FSMContext):
     data = await message.bot.download_file(file.file_path)
     content = data.read()
 
-    rows = _rows_from_csv_bytes(content)
-    if not rows:
-        await message.answer("Не нашёл валидных строк. Проверь формат файла.")
+    state_data = await state.get_data()
+    upload_type = state_data.get("upload_type")
+    if not upload_type:
+        await message.answer("Сначала выбери тип загрузки командой /upload_reiting.")
         return
 
-    n = await upsert_rating_rows(rows)
-    await recalc_team_totals()
+    if upload_type == UPLOAD_RATING_PARTICIPANTS:
+        rows = _rows_from_csv_bytes(content)
+        if not rows:
+            await message.answer("Не нашёл валидных строк. Проверь формат файла.")
+            return
+        n = await upsert_rating_rows(rows)
+        await recalc_team_totals()
+    elif upload_type == UPLOAD_RATING_TEAMS:
+        rows = _rows_from_rating_teams_csv_bytes(content)
+        if not rows:
+            await message.answer("Не нашёл валидных строк. Проверь формат файла.")
+            return
+        n = await upsert_rating_team_rows(rows)
+    else:
+        rows = _rows_from_participants_csv_bytes(content)
+        if not rows:
+            await message.answer("Не нашёл валидных строк. Проверь формат файла.")
+            return
+        n = await upsert_users_rows(rows)
+
     await state.clear()
     await message.answer(f"Загружено строк: {n}.")
 
@@ -1163,9 +1308,47 @@ async def upload_reiting_file(message: Message, state: FSMContext):
 async def upload_reiting_wrong(message: Message):
     await message.answer("Пришли .csv файлом (документом).")
 
+@router.message(RatingCSV.waiting_for_upload_choice)
+async def upload_reiting_need_choice(message: Message):
+    await message.answer("Сначала выбери тип файла для загрузки.", reply_markup=get_upload_csv_keyboard())
 
 @router.message(Command("reiting"))
-async def export_reiting(message: Message):
+async def export_reiting(message: Message, state: FSMContext):
+    user = await get_user(message.from_user.id)
+    role = user.role
+    if not role == 'Команда рейтинга':
+        await message.answer("Доступно только для роли «команда рейтинга».")
+        return
+    await state.set_state(RatingCSV.waiting_for_export_choice)
+    await message.answer("Выбери тип выгрузки.", reply_markup=get_export_csv_keyboard())
+
+@router.callback_query(RatingCSV.waiting_for_export_choice, lambda c: c.data in {EXPORT_RATING_PARTICIPANTS, EXPORT_RATING_TEAMS, EXPORT_PARTICIPANTS, EXPORT_LOGS})
+async def export_reiting_choice(callback_query: CallbackQuery, state: FSMContext):
+    user = await get_user(callback_query.from_user.id)
+    role = user.role
+    if not role == 'Команда рейтинга':
+        await state.clear()
+        await callback_query.message.answer("Доступно только для роли «команда рейтинга».")
+        return
+
+    await callback_query.answer()
+    await state.clear()
+    export_choice = callback_query.data
+
+    if export_choice == EXPORT_RATING_PARTICIPANTS:
+        await _export_rating_participants(callback_query.message)
+    elif export_choice == EXPORT_RATING_TEAMS:
+        await _export_rating_teams(callback_query.message)
+    elif export_choice == EXPORT_PARTICIPANTS:
+        await _export_participants(callback_query.message)
+    else:
+        await _export_logs(callback_query.message)
+
+@router.message(RatingCSV.waiting_for_export_choice)
+async def export_reiting_need_choice(message: Message):
+    await message.answer("Сначала выбери тип выгрузки.", reply_markup=get_export_csv_keyboard())
+
+async def _export_rating_participants(message: Message):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys=ON;")
@@ -1197,6 +1380,129 @@ async def export_reiting(message: Message):
         )
 
     filename = f"reiting_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    path = f"/tmp/{filename}"
+    with open(path, "wb") as f:
+        f.write(output.getvalue().encode("utf-8-sig"))
+
+    await message.answer_document(FSInputFile(path, filename=filename))
+
+async def _export_rating_teams(message: Message):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys=ON;")
+        cur = await db.execute(
+            """
+            SELECT team_number, team_name, team_total_points, updated_at
+            FROM ratingteams
+            ORDER BY team_total_points DESC, team_number
+            """
+        )
+        rows = await cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";", lineterminator="\n")
+    writer.writerow(["team_number", "team_name", "team_total_points", "updated_at"])
+    for r in rows:
+        writer.writerow(
+            [
+                r["team_number"],
+                r["team_name"],
+                r["team_total_points"],
+                r["updated_at"] or "",
+            ]
+        )
+
+    filename = f"rating_teams_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    path = f"/tmp/{filename}"
+    with open(path, "wb") as f:
+        f.write(output.getvalue().encode("utf-8-sig"))
+
+    await message.answer_document(FSInputFile(path, filename=filename))
+
+async def _export_participants(message: Message):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys=ON;")
+        cur = await db.execute(
+            """
+            SELECT tg_id, fio, team_number, role, badge_number, reiting, balance, date_registered
+            FROM users
+            ORDER BY team_number, fio
+            """
+        )
+        rows = await cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";", lineterminator="\n")
+    writer.writerow(["tg_id", "fio", "team_number", "role", "badge_number", "reiting", "balance", "date_registered"])
+    for r in rows:
+        writer.writerow(
+            [
+                r["tg_id"],
+                r["fio"] or "",
+                r["team_number"] if r["team_number"] is not None else "",
+                r["role"] or "",
+                r["badge_number"] if r["badge_number"] is not None else "",
+                r["reiting"],
+                r["balance"],
+                r["date_registered"] or "",
+            ]
+        )
+
+    filename = f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    path = f"/tmp/{filename}"
+    with open(path, "wb") as f:
+        f.write(output.getvalue().encode("utf-8-sig"))
+
+    await message.answer_document(FSInputFile(path, filename=filename))
+
+async def _export_logs(message: Message):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys=ON;")
+        cur = await db.execute(
+            """
+            SELECT id, event, actor_tg_id, adresat_tg_id, badge_number, role,
+                   complaint_id, file_row_id, tg_file_id, solution, created_at
+            FROM audit_log
+            ORDER BY id
+            """
+        )
+        rows = await cur.fetchall()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";", lineterminator="\n")
+    writer.writerow([
+        "id",
+        "event",
+        "actor_tg_id",
+        "adresat_tg_id",
+        "badge_number",
+        "role",
+        "complaint_id",
+        "file_row_id",
+        "tg_file_id",
+        "solution",
+        "created_at",
+    ])
+    for r in rows:
+        writer.writerow(
+            [
+                r["id"],
+                r["event"],
+                r["actor_tg_id"] if r["actor_tg_id"] is not None else "",
+                r["adresat_tg_id"] if r["adresat_tg_id"] is not None else "",
+                r["badge_number"] if r["badge_number"] is not None else "",
+                r["role"] or "",
+                r["complaint_id"] if r["complaint_id"] is not None else "",
+                r["file_row_id"] if r["file_row_id"] is not None else "",
+                r["tg_file_id"] or "",
+                r["solution"] or "",
+                r["created_at"] or "",
+            ]
+        )
+
+    filename = f"audit_log_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     path = f"/tmp/{filename}"
     with open(path, "wb") as f:
         f.write(output.getvalue().encode("utf-8-sig"))

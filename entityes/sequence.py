@@ -48,4 +48,6 @@ class Mailing(StatesGroup):
     waiting_for_mailing_text = State()
 
 class RatingCSV(StatesGroup):
+    waiting_for_upload_choice = State()
+    waiting_for_export_choice = State()
     waiting_for_csv = State()

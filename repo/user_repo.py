@@ -44,6 +44,54 @@ async def update_user(user: User):
         await db.commit()
         USERS[user.user_id] = user
 
+async def upsert_users_rows(rows: list[dict]) -> int:
+    if not rows:
+        return 0
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.executemany(
+            """
+            INSERT INTO users (tg_id, fio, role, team_number, badge_number, reiting, balance, date_registered)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(tg_id) DO UPDATE SET
+                fio=excluded.fio,
+                role=excluded.role,
+                team_number=excluded.team_number,
+                badge_number=excluded.badge_number,
+                reiting=excluded.reiting,
+                balance=excluded.balance,
+                date_registered=excluded.date_registered
+            """,
+            [
+                (
+                    r["tg_id"],
+                    r["fio"],
+                    r["role"],
+                    r["team_number"],
+                    r["badge_number"],
+                    r["reiting"],
+                    r["balance"],
+                    r["date_registered"],
+                )
+                for r in rows
+            ],
+        )
+        await db.commit()
+
+    for r in rows:
+        USERS[r["tg_id"]] = User(
+            user_id=r["tg_id"],
+            fio=r["fio"],
+            team_number=r["team_number"],
+            role=r["role"],
+            badge_number=r["badge_number"],
+            reiting=r["reiting"],
+            balance=r["balance"],
+            date_registered=r["date_registered"],
+        )
+
+    return len(rows)
+
 async def delete_user(tg_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM users WHERE tg_id = ?;", (tg_id,))
