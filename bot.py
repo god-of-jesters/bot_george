@@ -699,7 +699,7 @@ async def add_media_to_current_complaint(message: Message, complaint: Complaint)
             photo = message.photo[-1]
             file = File(
                 id=None,
-                tg_id=complaint.user_id,
+                user_id=complaint.user_id,
                 tg_file_id=photo.file_id,
                 complaint_id=None,
                 file_name=f"photo_{complaint.photo_count + 1}.jpg",
@@ -719,7 +719,7 @@ async def add_media_to_current_complaint(message: Message, complaint: Complaint)
             video = message.video
             file = File(
                 id=None,
-                tg_id=complaint.user_id,
+                user_id=complaint.user_id,
                 tg_file_id=video.file_id,
                 complaint_id=None,
                 file_name=video.file_name or f"video_{complaint.video_count + 1}.mp4",
@@ -1044,16 +1044,16 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
     
     text = text + (message.text or "").strip()
     if role == 'Администраторы по комнатам':
-        recipients = await get_participants_and_room_admins_tg_ids(exclude_tg_id=user_id)
+        recipients = await get_participants_and_room_admins_user_ids(exclude_user_id=user_id)
     else:
-        recipients = await get_participants_tg_ids(exclude_tg_id=user_id)
+        recipients = await get_participants_user_ids(exclude_user_id=user_id)
 
     sent = 0
     failed = 0
 
-    for tg_id in recipients:
+    for user_id in recipients:
         try:
-            await bot.send_message(tg_id, text)
+            await bot.send_message(user_id, text)
             sent += 1
         except Exception:
             failed += 1
@@ -1209,14 +1209,14 @@ def _rows_from_participants_csv_bytes(data: bytes) -> list[dict]:
             fio = _parse_text(r[1])
             role = _parse_text(r[2]) or "Участник"
 
-        if badge_number <= 0:
+        if badge_number < 0:
             continue
 
-        tg_id = badge_number
+        user_id = badge_number
 
         rows.append(
             {
-                "tg_id": tg_id,
+                "user_id": user_id,
                 "fio": fio,
                 "team_number": None,
                 "role": role,
@@ -1229,7 +1229,7 @@ def _rows_from_participants_csv_bytes(data: bytes) -> list[dict]:
 
     return rows
 
-@router.message(Command("upload_reiting"))
+@router.message(Command("upload_file"))
 async def upload_reiting_cmd(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
     role = user.role
@@ -1305,7 +1305,19 @@ async def upload_reiting_file(message: Message, state: FSMContext):
         if not rows:
             await message.answer("Не нашёл валидных строк. Проверь формат файла.")
             return
-        n = await upsert_users_rows(rows)
+        for row in rows:
+            await add_user(
+                User(
+                    user_id=row["user_id"],
+                    fio=row["fio"],
+                    team_number=row["team_number"],
+                    role=row["role"],
+                    badge_number=row["badge_number"],
+                    reiting=row["reiting"],
+                    balance=row["balance"],
+                    date_registered=row["date_registered"],
+                )
+            )
 
     await state.clear()
     await message.answer(f"Загружено строк: {n}.")
@@ -1319,7 +1331,7 @@ async def upload_reiting_wrong(message: Message):
 async def upload_reiting_need_choice(message: Message):
     await message.answer("Сначала выбери тип файла для загрузки.", reply_markup=get_upload_csv_keyboard())
 
-@router.message(Command("reiting"))
+@router.message(Command("get_file"))
 async def export_reiting(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
     role = user.role
@@ -1432,7 +1444,7 @@ async def _export_participants(message: Message):
         await db.execute("PRAGMA foreign_keys=ON;")
         cur = await db.execute(
             """
-            SELECT tg_id, fio, team_number, role, badge_number, reiting, balance, date_registered
+            SELECT user_id, fio, team_number, role, badge_number, reiting, balance, date_registered
             FROM users
             ORDER BY team_number, fio
             """
@@ -1441,11 +1453,11 @@ async def _export_participants(message: Message):
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";", lineterminator="\n")
-    writer.writerow(["tg_id", "fio", "team_number", "role", "badge_number", "reiting", "balance", "date_registered"])
+    writer.writerow(["user_id", "fio", "team_number", "role", "badge_number", "reiting", "balance", "date_registered"])
     for r in rows:
         writer.writerow(
             [
-                r["tg_id"],
+                r["user_id"],
                 r["fio"] or "",
                 r["team_number"] if r["team_number"] is not None else "",
                 r["role"] or "",
@@ -1469,7 +1481,7 @@ async def _export_logs(message: Message):
         await db.execute("PRAGMA foreign_keys=ON;")
         cur = await db.execute(
             """
-            SELECT id, event, actor_tg_id, adresat_tg_id, badge_number, role,
+            SELECT id, event, actor_user_id, adresat_user_id, badge_number, role,
                    complaint_id, file_row_id, tg_file_id, solution, created_at
             FROM audit_log
             ORDER BY id
@@ -1482,8 +1494,8 @@ async def _export_logs(message: Message):
     writer.writerow([
         "id",
         "event",
-        "actor_tg_id",
-        "adresat_tg_id",
+        "actor_user_id",
+        "adresat_user_id",
         "badge_number",
         "role",
         "complaint_id",
@@ -1497,8 +1509,8 @@ async def _export_logs(message: Message):
             [
                 r["id"],
                 r["event"],
-                r["actor_tg_id"] if r["actor_tg_id"] is not None else "",
-                r["adresat_tg_id"] if r["adresat_tg_id"] is not None else "",
+                r["actor_user_id"] if r["actor_user_id"] is not None else "",
+                r["adresat_user_id"] if r["adresat_user_id"] is not None else "",
                 r["badge_number"] if r["badge_number"] is not None else "",
                 r["role"] or "",
                 r["complaint_id"] if r["complaint_id"] is not None else "",
@@ -1532,12 +1544,12 @@ async def start_handler(message: Message, state: FSMContext):
         active_sessions[user_id] = user
         await show_main_menu(message.bot, user_id, state=state)
 
-async def send_files(bot: Bot, complaint_id: int, tg_id: int = None) -> str:
+async def send_files(bot: Bot, complaint_id: int, user_id: int = None) -> str:
     complaint = await get_complaint(complaint_id)
     if not complaint:
         return "Жалоба не найдена."
 
-    user_id = tg_id
+    user_id = user_id
     files = await get_files_by_complaint(complaint_id)
     if not files:
         return "Файлов в жалобе нет."

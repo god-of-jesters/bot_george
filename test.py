@@ -26,6 +26,11 @@ async def add():
     await add_team(team)
     print("Team added")
 
+async def show_all_users():
+    async with aiosqlite.connect(DB_PATH) as db:
+        c = await db.execute("SELECT * FROM users")
+        r = await c.fetchall()
+        print(r)
 
 async def show_all_files():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -45,4 +50,4 @@ async def show_all_reiting():
         r = await c.fetchall()
         print(r)
 
-asyncio.run(show_all_reiting())
+asyncio.run(show_all_users())
