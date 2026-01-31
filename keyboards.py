@@ -195,6 +195,23 @@ def get_users_keyboard():
     kb.adjust(1)
     return kb.as_markup()
 
+def get_upload_csv_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Рейтинг участников", callback_data="upload_rating_participants")
+    kb.button(text="Рейтинг команд", callback_data="upload_rating_teams")
+    kb.button(text="Загрузка участников", callback_data="upload_participants")
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_export_csv_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Рейтинг участников", callback_data="export_rating_participants")
+    kb.button(text="Рейтинг команд", callback_data="export_rating_teams")
+    kb.button(text="Участники", callback_data="export_participants")
+    kb.button(text="Выгрузить логи", callback_data="export_logs")
+    kb.adjust(1)
+    return kb.as_markup()
+
 def get_edit_badge_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text="ФИО", callback_data=f"fio")
