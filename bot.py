@@ -200,19 +200,25 @@ async def main_menu_callback(message: Message, state: FSMContext):
     match active_sessions[user_id].role:
             case "Участник":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_student_keyboard())
+                await state.set_state(MainMenu.main_menu_student)
             case "Организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
-            case "РПГ-организаторы":
+                await state.set_state(MainMenu.main_menu_organizer)
+            case "РПГ":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
+                await state.set_state(MainMenu.main_menu_rpg_organizer) 
             case "Администраторы по комнатам":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_admins_keyboard())
+                await state.set_state(MainMenu.main_menu_admins)
             case "Команда рейтинга":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
-            case "Команда медиа":
+                await state.set_state(MainMenu.main_menu_rating_team) 
+            case "Медиа":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
+                await state.set_state(MainMenu.main_menu_media_team)
             case "Главный организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
-    await state.set_state(MainMenu.main_menu)
+                await state.set_state(MainMenu.main_menu_chief_organizer)
 
 @router.message(Command("teg"))
 async def cmd_teg(message: Message):
@@ -299,7 +305,7 @@ async def show_main_rpg_organizer(callback_query: Message, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
     role = getattr(active_sessions.get(user_id), "role", None)
-    if role != "РПГ-организаторы":
+    if role != "РПГ":
         return
 
     match data:
@@ -693,7 +699,7 @@ async def add_media_to_current_complaint(message: Message, complaint: Complaint)
             photo = message.photo[-1]
             file = File(
                 id=None,
-                tg_id=complaint.user_id,
+                user_id=complaint.user_id,
                 tg_file_id=photo.file_id,
                 complaint_id=None,
                 file_name=f"photo_{complaint.photo_count + 1}.jpg",
@@ -713,7 +719,7 @@ async def add_media_to_current_complaint(message: Message, complaint: Complaint)
             video = message.video
             file = File(
                 id=None,
-                tg_id=complaint.user_id,
+                user_id=complaint.user_id,
                 tg_file_id=video.file_id,
                 complaint_id=None,
                 file_name=video.file_name or f"video_{complaint.video_count + 1}.mp4",
@@ -927,7 +933,7 @@ async def process_user_new_value(message: Message, state: FSMContext):
                 return
             user.team_number = int(value)
         case "role":
-            if value.lower() not in ["участник", "организатор", "рпг-организатор", "администратор по комнатам", "команда рейтинга", "команда медиа", "главный организатор"]:
+            if value.lower() not in ["участник", "организатор", "рпг-организатор", "администратор по комнатам", "команда рейтинга", "Медиа", "главный организатор"]:
                 await message.answer("Неверная роль, введите еще раз.")
                 return
             user.role = value
@@ -1022,32 +1028,32 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
     user_id = message.from_user.id
     role = active_sessions[user_id].role
     user = await get_user(user_id)
-    if not await get_permission_maling(user.badge_number):
-        message.answer('Нет доступа к рассылке')
-        await show_main_menu(bot, user_id, state)
-        return
+#    if not await get_permission_maling(user.badge_number):
+#       message.answer('Нет доступа к рассылке')
+#       await show_main_menu(bot, user_id, state)
+#       return
 
     if role == 'Команда рейтинга':
         text = 'Общая рассылка от команды рейтинга\n\n'
     elif role == 'Организатор':
-        text = 'Общая рассылка от организаторов'
+        text = 'Общая рассылка от организаторов\n\n'
     elif role == 'Администраторы по комнатам':
-        text = 'Общая рассылка от организаторов'
-    elif role == 'РПГ-организаторы':
-        text = 'Общая рассылка от РПГ-организаторов'
+        text = 'Общая рассылка от администраторов комнат\n\n'
+    elif role == 'РПГ':
+        text = 'Общая рассылка от РПГ-организаторов\n\n'
     
     text = text + (message.text or "").strip()
     if role == 'Администраторы по комнатам':
-        recipients = await get_participants_and_room_admins_tg_ids(exclude_tg_id=user_id)
+        recipients = await get_participants_and_room_admins_user_ids(exclude_user_id=user_id)
     else:
-        recipients = await get_participants_tg_ids(exclude_tg_id=user_id)
+        recipients = await get_participants_user_ids(exclude_user_id=user_id)
 
     sent = 0
     failed = 0
 
-    for tg_id in recipients:
+    for user_id in recipients:
         try:
-            await bot.send_message(tg_id, text)
+            await bot.send_message(user_id, text)
             sent += 1
         except Exception:
             failed += 1
@@ -1203,13 +1209,14 @@ def _rows_from_participants_csv_bytes(data: bytes) -> list[dict]:
             fio = _parse_text(r[1])
             role = _parse_text(r[2]) or "Участник"
 
-        if badge_number <= 0:
+        if badge_number < 0:
             continue
-        tg_id = badge_number
+
+        user_id = badge_number
 
         rows.append(
             {
-                "tg_id": tg_id,
+                "user_id": user_id,
                 "fio": fio,
                 "team_number": None,
                 "role": role,
@@ -1222,7 +1229,7 @@ def _rows_from_participants_csv_bytes(data: bytes) -> list[dict]:
 
     return rows
 
-@router.message(Command("upload_reiting"))
+@router.message(Command("upload_file"))
 async def upload_reiting_cmd(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
     role = user.role
@@ -1312,7 +1319,7 @@ async def upload_reiting_wrong(message: Message):
 async def upload_reiting_need_choice(message: Message):
     await message.answer("Сначала выбери тип файла для загрузки.", reply_markup=get_upload_csv_keyboard())
 
-@router.message(Command("reiting"))
+@router.message(Command("get_file"))
 async def export_reiting(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
     role = user.role
@@ -1425,7 +1432,7 @@ async def _export_participants(message: Message):
         await db.execute("PRAGMA foreign_keys=ON;")
         cur = await db.execute(
             """
-            SELECT tg_id, fio, team_number, role, badge_number, reiting, balance, date_registered
+            SELECT user_id, fio, team_number, role, badge_number, reiting, balance, date_registered
             FROM users
             ORDER BY team_number, fio
             """
@@ -1434,11 +1441,11 @@ async def _export_participants(message: Message):
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";", lineterminator="\n")
-    writer.writerow(["tg_id", "fio", "team_number", "role", "badge_number", "reiting", "balance", "date_registered"])
+    writer.writerow(["user_id", "fio", "team_number", "role", "badge_number", "reiting", "balance", "date_registered"])
     for r in rows:
         writer.writerow(
             [
-                r["tg_id"],
+                r["user_id"],
                 r["fio"] or "",
                 r["team_number"] if r["team_number"] is not None else "",
                 r["role"] or "",
@@ -1462,7 +1469,7 @@ async def _export_logs(message: Message):
         await db.execute("PRAGMA foreign_keys=ON;")
         cur = await db.execute(
             """
-            SELECT id, event, actor_tg_id, adresat_tg_id, badge_number, role,
+            SELECT id, event, actor_user_id, adresat_user_id, badge_number, role,
                    complaint_id, file_row_id, tg_file_id, solution, created_at
             FROM audit_log
             ORDER BY id
@@ -1475,8 +1482,8 @@ async def _export_logs(message: Message):
     writer.writerow([
         "id",
         "event",
-        "actor_tg_id",
-        "adresat_tg_id",
+        "actor_user_id",
+        "adresat_user_id",
         "badge_number",
         "role",
         "complaint_id",
@@ -1490,8 +1497,8 @@ async def _export_logs(message: Message):
             [
                 r["id"],
                 r["event"],
-                r["actor_tg_id"] if r["actor_tg_id"] is not None else "",
-                r["adresat_tg_id"] if r["adresat_tg_id"] is not None else "",
+                r["actor_user_id"] if r["actor_user_id"] is not None else "",
+                r["adresat_user_id"] if r["adresat_user_id"] is not None else "",
                 r["badge_number"] if r["badge_number"] is not None else "",
                 r["role"] or "",
                 r["complaint_id"] if r["complaint_id"] is not None else "",
@@ -1525,12 +1532,12 @@ async def start_handler(message: Message, state: FSMContext):
         active_sessions[user_id] = user
         await show_main_menu(message.bot, user_id, state=state)
 
-async def send_files(bot: Bot, complaint_id: int, tg_id: int = None) -> str:
+async def send_files(bot: Bot, complaint_id: int, user_id: int = None) -> str:
     complaint = await get_complaint(complaint_id)
     if not complaint:
         return "Жалоба не найдена."
 
-    user_id = tg_id
+    user_id = user_id
     files = await get_files_by_complaint(complaint_id)
     if not files:
         return "Файлов в жалобе нет."
@@ -1555,7 +1562,7 @@ async def show_main_menu(bot: Bot, user_id: int, state: FSMContext):
             case "Организатор":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_organizer_keyboard())
                 await state.set_state(MainMenu.main_menu_organizer)
-            case "РПГ-организаторы":
+            case "РПГ":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_rpg_organizer_keyboard())
                 await state.set_state(MainMenu.main_menu_rpg_organizer)
             case "Администраторы по комнатам":
@@ -1564,7 +1571,7 @@ async def show_main_menu(bot: Bot, user_id: int, state: FSMContext):
             case "Команда рейтинга":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_rating_team_keyboard())
                 await state.set_state(MainMenu.main_menu_rating_team)
-            case "Команда медиа":
+            case "Медиа":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
                 await state.set_state(MainMenu.main_menu_media_team)
             case "Главный организатор":
