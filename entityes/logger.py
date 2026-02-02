@@ -10,12 +10,12 @@ async def log_login(tg_id: int, badge_number: int | None, role: str | None):
         await db.commit()
 
 
-async def log_complaint_created(actor_tg_id: int, adresat_tg_id: int, complaint_id: int):
+async def log_complaint_created(actor_tg_id: int, adresat_badge_number: int, complaint_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            INSERT INTO audit_log(event, actor_tg_id, adresat_tg_id, complaint_id)
+            INSERT INTO audit_log(event, actor_tg_id, badge_number, complaint_id)
             VALUES('complaint_created', ?, ?, ?)
-        """, (actor_tg_id, adresat_tg_id, complaint_id))
+        """, (actor_tg_id, adresat_badge_number, complaint_id))
         await db.commit()
 
 

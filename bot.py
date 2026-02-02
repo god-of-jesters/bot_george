@@ -64,25 +64,27 @@ ALBUM_FLUSH_DELAY = 0.7
 router = Router()
 
 async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint", decision: str):
-    adr_user = await get_user(com.adresat)
+    adr_user = await get_user_by_badge(com.adresat)
     fine = violetion_vines.get(com.violetion, 0)
 
     if decision == "yes":
-        if adr_user.role == "Участник":
+        if adr_user and adr_user.role == "Участник":
             adr_user.reiting -= fine
             await update_user(adr_user)
-            await bot.send_message(
-                adr_user.tg_id,
-                f"На вас пришла новая жалоба. Снято {fine} единиц рейтинга.\n"
-                f"Время жалобы: {com.date_created}.\n"
-                f"Описание: {com.description}"
-            )
+            if adr_user.tg_id is not None:
+                await bot.send_message(
+                    adr_user.tg_id,
+                    f"На вас пришла новая жалоба. Снято {fine} единиц рейтинга.\n"
+                    f"Время жалобы: {com.date_created}.\n"
+                    f"Описание: {com.description}"
+                )
             com.execution = "done"
     else:
-        await bot.send_message(
-            adr_user.tg_id,  
-            "На вас была подана жалоба. Рейтинг посчитала, что жалоба недействительна."
-        )
+        if adr_user and adr_user.tg_id is not None:
+            await bot.send_message(
+                adr_user.tg_id,  
+                "На вас была подана жалоба. Рейтинг посчитала, что жалоба недействительна."
+            )
         com.execution = "rejected"
 
     await update_execution(com.complaint_id, 'done')
@@ -185,11 +187,12 @@ async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMConte
     await update_execution(com.complaint_id, "view")
 
     user = await get_user(com.user_id)
-    adr = await get_user(com.adresat)
+    adr = await get_user_by_badge(com.adresat)
+    adr_name = adr.fio if adr else f"бейдж {com.adresat}"
 
     await send_complaint_files(callback_query.bot, user_id, com.complaint_id)
     await callback_query.message.answer(
-        f"Жалоба от {user.fio}\nНа {adr.fio}\nЖалоба: {com.description}",
+        f"Жалоба от {user.fio}\nНа {adr_name}\nЖалоба: {com.description}",
         reply_markup=get_yes_no_keyboard()
     )
 
@@ -570,7 +573,7 @@ async def process_complaint_badge(message: Message, state: FSMContext):
             await message.answer('Нельзя подать жалобу на себя же. Введите еще раз номер бейджа')
             await state.set_state(ComplaintProcess.waiting_for_badge)
             return
-        complaintes[user_id].adresat = user.tg_id
+        complaintes[user_id].adresat = user.badge_number
         
         await message.answer(text="Выберете категорию жалобы.", reply_markup=get_complaint_category_keyboard())
         await state.set_state(ComplaintProcess.waiting_for_complaint_category)
@@ -1692,51 +1695,56 @@ async def notify_all_reiting_team(bot: Bot, complaint: Complaint, state: FSMCont
 
 async def notify_persone(bot: Bot, complaint: "Complaint", state: FSMContext):
     fr = await get_user(complaint.user_id)
+    adr = await get_user_by_badge(complaint.adresat)
+    target_tg_id = adr.tg_id if adr else None
 
-    if complaint.complaint_id:
+    if complaint.complaint_id and target_tg_id is not None:
         rows = await get_files_by_complaint_id(complaint.complaint_id)
         for r in rows:
             tg_file_id = r["tg_file_id"]
             mime = (r["mime_type"] or "").lower()
             if mime.startswith("video"):
-                await bot.send_video(complaint.adresat, tg_file_id)
+                await bot.send_video(target_tg_id, tg_file_id)
             else:
-                await bot.send_photo(complaint.adresat, tg_file_id)
+                await bot.send_photo(target_tg_id, tg_file_id)
 
     fine = violetion_vines.get(complaint.violetion, 0)
-    adr = await get_user_by_badge(complaint.adresat)
+    if adr is None:
+        return
 
     if fr.badge_number < 100:
-        await bot.send_message(
-            complaint.adresat,
-            "На вас пришла новая жалоба от организатора.\n"
-            f"Снято {fine} единиц рейтинга.\n"
-            f"Время жалобы: {complaint.date_created}.\n"
-            f"Описание: {complaint.description}"
-        )
-        adr_user = await get_user(complaint.adresat)
-        adr_user.reiting -= fine
-        await update_user(adr_user)
+        if target_tg_id is not None:
+            await bot.send_message(
+                target_tg_id,
+                "На вас пришла новая жалоба от организатора.\n"
+                f"Снято {fine} единиц рейтинга.\n"
+                f"Время жалобы: {complaint.date_created}.\n"
+                f"Описание: {complaint.description}"
+            )
+        adr.reiting -= fine
+        await update_user(adr)
     else:
         if adr.role == 'Участник':
-            await bot.send_message(
-                complaint.adresat,
-                "На вас пришла новая жалоба от участника.\n"
-                f"Время жалобы: {complaint.date_created}.\n"
-                f"Категория жалобы: {complaint.violetion}.\n"
-                f"Штраф: {fine}.\n"
-                f"Описание: {complaint.description}",
-                reply_markup=get_agree_disagree_keyboard()
-            )
+            if target_tg_id is not None:
+                await bot.send_message(
+                    target_tg_id,
+                    "На вас пришла новая жалоба от участника.\n"
+                    f"Время жалобы: {complaint.date_created}.\n"
+                    f"Категория жалобы: {complaint.violetion}.\n"
+                    f"Штраф: {fine}.\n"
+                    f"Описание: {complaint.description}",
+                    reply_markup=get_agree_disagree_keyboard()
+                )
         else:
-            await bot.send_message(
-                complaint.adresat,
-                "На вас пришла новая жалоба от участника.\n"
-                f"Время жалобы: {complaint.date_created}.\n"
-                f"Категория жалобы: {complaint.violetion}.\n"
-                f"Штраф: {fine}.\n"
-                f"Описание: {complaint.description}",
-            )
+            if target_tg_id is not None:
+                await bot.send_message(
+                    target_tg_id,
+                    "На вас пришла новая жалоба от участника.\n"
+                    f"Время жалобы: {complaint.date_created}.\n"
+                    f"Категория жалобы: {complaint.violetion}.\n"
+                    f"Штраф: {fine}.\n"
+                    f"Описание: {complaint.description}",
+                )
 
 async def main():
     global bot_instance
