@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 class User:
-    def __init__(self, user_id: int, fio: str = None, team_number: int = None, role: str = None, badge_number: int = None, reiting: int = None, date_registered: str = None, balance: int = None):
-        self.user_id = user_id
+    def __init__(self, tg_id: int, fio: str = None, team_number: int = None, role: str = None, badge_number: int = None, reiting: int = None, date_registered: str = None, balance: int = None):
+        self.tg_id = tg_id
         self.fio = fio
         self.team_number = team_number
         self.role = role

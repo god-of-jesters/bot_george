@@ -26,7 +26,7 @@ async def init_db():
         await db.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tg_id INTEGER NOT NULL UNIQUE,
+            tg_id INTEGER UNIQUE,
             fio TEXT,
             role TEXT NOT NULL DEFAULT 'participant',
             team_number INTEGER,
@@ -117,7 +117,7 @@ async def init_db():
             adresat TEXT NOT NULL,
             badge_number INTEGER NOT NULL DEFAULT 0,
             text TEXT,
-            status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'answered')),
+            status TEXT NOT NULL DEFAULT 'new',
             date_created TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(tg_id) ON DELETE CASCADE
         );
@@ -153,15 +153,6 @@ async def init_db():
         );
         """)
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS permissions(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            badge_number INTEGER NOT NULL,
-            mailing INTEGER,
-            FOREIGN KEY (badge_number) REFERENCES users(badge_number)
-        );
-        """)
-
         await db.commit()
 
 
@@ -173,7 +164,7 @@ async def load_datastore():
         )
         for row in await cursor.fetchall():
             user = User(
-                user_id=row[0],
+                tg_id=row[0],
                 fio=row[1],
                 team_number=row[2],
                 role=row[3],
@@ -181,7 +172,7 @@ async def load_datastore():
                 reiting=row[5],
                 balance=row[6]
             )
-            USERS[user.user_id] = user
+            USERS[user.tg_id] = user
 
         cursor = await db.execute(
             "SELECT id, tg_id, tg_file_id, complaint_id, file_name, mime_type, file_size, created_at FROM files;"

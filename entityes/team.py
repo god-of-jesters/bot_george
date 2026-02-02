@@ -5,4 +5,4 @@ class Team:
         self.team_number = team_number
         self.team_name = team_name
         self.reiting = 0
-        self.members = [user.user_id for user in members] if members else []
+        self.members = [user.tg_id for user in members] if members else []

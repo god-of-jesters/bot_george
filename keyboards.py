@@ -276,3 +276,11 @@ def get_room_admins_complaints():
     kb.button(text='Завершенные', case='done')
     kb.adjust(1)
     return kb.as_markup()
+
+def get_maling_adresat():
+    kb = InlineKeyboardBuilder()
+    kb.button('Участнику/организатору', case='user')
+    kb.button('Команде', case='team')
+    kb.button('Треку', case='trek')
+    kb.adjust(1)
+    return kb.as_markup()

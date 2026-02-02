@@ -83,3 +83,28 @@ async def delete_message(message_id: int):
         await db.commit()
         if message_id in MESSAGES:
             del MESSAGES[message_id]
+
+async def get_new_messages() -> list[Message]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            'SELECT * FROM messages WHERE status = "new"'
+        )
+        rows = await cursor.fetchall()
+    return [
+        Message(
+            id=row['id'],
+            user_id=row['user_id'],
+            adresat=row['adresat'],
+            badge_number=row['badge_number'],
+            text=row['text']
+        )
+        for row in rows
+    ]
+
+async def update_status(id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            'UPDATE messages SET status = "answered" WHERE id = ?', (id, )
+        )
+        await db.commit()
