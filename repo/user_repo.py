@@ -108,7 +108,7 @@ async def get_user_by_badge(badge_number: int) -> User | None:
 
 async def get_raiting_team_tg() -> list[int]:
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute('SELECT tg_id FROM users WHERE role="Команда рейтинга" AND tg_id NOT NULL')
+        cursor = await db.execute('SELECT tg_id FROM users WHERE role="Рейтинг" AND tg_id NOT NULL')
         row = await cursor.fetchall()
         return [i[0] for i in row]
 
@@ -172,7 +172,7 @@ async def get_participants_and_room_admins_user_ids(exclude_tg_id: int) -> list[
             FROM users
             WHERE role IN (?, ?) AND tg_id != ? AND tg_id NOT NULL;
             """,
-            ("Участник", "Администраторы по комнатам", exclude_tg_id),
+            ("Участник", "Администратор", exclude_tg_id),
         )
         rows = await cursor.fetchall()
     return [r[0] for r in rows]

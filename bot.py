@@ -426,36 +426,29 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
-@router.callback_query(MainMenu.main_menu_chief_organizer)
+@router.callback_query(MainMenu.main_menu_media)
 async def show_main_chief_organizer(callback_query: Message, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
     role = getattr(active_sessions.get(user_id), "role", None)
-    if role != "Главный организатор":
+    if role != "Медиа":
         return
 
     match data:
         case "profile":
-            await callback_query.message.answer("Профиль главного организатора.", reply_markup=get_profile_keyboard())
+            await callback_query.message.answer("Профиль медиа.", reply_markup=get_profile_keyboard())
             await state.set_state(MainMenu.profile)
 
-        case "team_management":
-            await callback_query.message.answer("Управление командой.\n(Здесь будет модуль управления командой.)")
-
-        case "view_complaints":
-            await callback_query.message.answer("Жалобы.\n(Здесь будет модуль работы с жалобами.)")
-
         case "mailing":
-            await callback_query.message.answer("Рассылка.\n(Здесь будет модуль рассылки.)")
-
-        case "reports_analytics":
-            await callback_query.message.answer("Отчеты и аналитика.\n(Здесь будут отчеты и аналитика.)")
+            await callback_query.message.answer("Введите текст рассылки.\n")
+            await state.set_state(Mailing.waiting_for_mailing_text)
 
         case "contact":
-            await callback_query.message.answer("Сообщить/Обратиться.\n(Здесь будет форма сообщения.)")
+            await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
+            await state.set_state(MainMenu.message_to_rating_team)
 
         case "help":
-            await callback_query.message.answer("Помощь.\n(Здесь будет справка для главного организатора.)")
+            await callback_query.message.answer("Помощь.\n(Здесь будет справка для медиа.)")
 
         case _:
             await callback_query.message.answer("Команда не распознана.")
@@ -516,16 +509,20 @@ async def process_message_to_admin(message: Message, state: FSMContext):
 async def process_message_to_rating_team(message: Message, state: FSMContext):
     user_id = message.from_user.id
     role = getattr(active_sessions.get(user_id), "role", None)
-    if role != "Администраторы по комнатам":
-        await show_main_menu(message.bot, user_id, state)
+    badge = active_sessions[user_id].badge_number
+    if role != "Администратор" and role != "Медиа":
         return
-    message_text = message.text
+    match role:
+        case "Администратор":
+            adresat = "Администраторы по комнатам"
+        case "Медиа":
+            adresat = "Медиа"
     await add_message(
         ms(
             user_id=user_id,
-            adresat="Рейтинг",
-            badge_number=0,
-            text=message_text,
+            adresat=adresat,
+            badge_number=badge,
+            text=message.text,
         )
     )
     await message.answer("Ваше сообщение отправлено команде рейтинга. Спасибо.")
@@ -618,6 +615,7 @@ async def process_complaint_category_callback(callback_query: Message, state: FS
             case _:
                 await callback_query.bot.send_message(user_id, text_other, reply_markup=get_other_keyboard())
         await state.set_state(ComplaintProcess.waiting_for_violation_type)
+    print(complaintes[user_id].status)
 
 @router.callback_query(ComplaintProcess.waiting_for_violation_type)
 async def process_complaint_violation_type(callback_query: CallbackQuery, state: FSMContext):
@@ -648,9 +646,9 @@ async def process_complaint_violation_type(callback_query: CallbackQuery, state:
             complaintes[user_id].violetion = c2[data]
         case _:
             complaintes[user_id].violetion = c3[data]
-    print()
     await callback_query.message.answer("Опишите вашу жалобу подробно.")
     await state.set_state(ComplaintProcess.waiting_for_complaint_text)
+    print(complaintes[user_id].violetion)
 
 @router.message(ComplaintProcess.waiting_for_complaint_text)
 async def process_complaint_text(message: Message, state: FSMContext):
@@ -663,7 +661,7 @@ async def process_complaint_text(message: Message, state: FSMContext):
 @router.message(Command("skip"), ComplaintProcess.waiting_for_complaint_files)
 async def skip_files(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    complaint = complaintes.get(user_id)
+    complaint = complaintes[user_id]
     if not complaint:
         await message.answer("Жалоба не найдена. Начните заново.")
         return
@@ -671,7 +669,7 @@ async def skip_files(message: Message, state: FSMContext):
     complaint_id = await add_complaint(complaint)
     await log_complaint_created(complaint.user_id, complaint.adresat, complaint_id)
 
-    if getattr(complaint, "status", None) == "alert":
+    if complaint.status == "alert":
         await notify_all_reiting_team(message.bot, complaint, state)
 
     complaintes.pop(user_id, None)
@@ -679,10 +677,10 @@ async def skip_files(message: Message, state: FSMContext):
     await message.answer("Жалоба отправлена. Спасибо.")
     await show_main_menu(message.bot, user_id, state)
 
-async def _finalize_complaint(bot: Bot, user_id: int, state: FSMContext, chat_id: int):
-    complaint = complaintes.get(user_id)
+async def _finalize_complaint(bot: Bot, user_id: int, state: FSMContext):
+    complaint = complaintes[user_id]
     if not complaint:
-        await bot.send_message(chat_id, "Жалоба не найдена. Начните заново.")
+        await bot.send_message(user_id, "Жалоба не найдена. Начните заново.")
         return
 
     complaint_id = await add_complaint(complaint)
@@ -694,7 +692,7 @@ async def _finalize_complaint(bot: Bot, user_id: int, state: FSMContext, chat_id
 
     complaintes.pop(user_id, None)
 
-    await bot.send_message(chat_id, "Жалоба отправлена. Спасибо.")
+    await bot.send_message(user_id, "Жалоба отправлена. Спасибо.")
     await show_main_menu(bot, user_id, state)
 
 async def add_media_to_current_complaint(message: Message, complaint: Complaint):
@@ -800,7 +798,7 @@ async def handle_files(message: Message, state: FSMContext):
         return
 
     await message.answer("Файлы обработаны. " + text)
-    await _finalize_complaint(message.bot, user_id, state, message.chat.id)
+    await _finalize_complaint(message.bot, user_id, state)
 
 @router.callback_query(lambda c: c.data == 'agree' or c.data == 'disagree')
 async def process_complaint_student(callback_query: CallbackQuery, state: FSMContext):
@@ -939,7 +937,7 @@ async def process_user_new_value(message: Message, state: FSMContext):
                 return
             user.team_number = int(value)
         case "role":
-            if value.lower() not in ["участник", "организатор", "рпг-организатор", "администратор по комнатам", "Рейтинг", "Медиа", "главный организатор"]:
+            if value.lower() not in ["участник", "организатор", "рпг", "администратор", "рейтинг", "медиа"]:
                 await message.answer("Неверная роль, введите еще раз.")
                 return
             user.role = value
@@ -1059,13 +1057,14 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
         await show_main_menu(message.bot, user_id, state)
         await state.set_state(MainMenu.main_menu_rating_team)
         return
-    elif role == 'Администраторы по комнатам':
+    elif role == 'Администраторы':
         text = 'Общая рассылка от администраторов комнат\n\n'
     elif role == 'РПГ':
         text = 'Общая рассылка от РПГ-организаторов\n\n'
-    
+    elif role == 'Медиа':
+        text = 'Общая рассылка от медиа\n\n'
     text = text + (message.text or "").strip()
-    if role == 'Администраторы по комнатам':
+    if role == 'Администратор':
         recipients = await get_participants_and_room_admins_user_ids(exclude_user_id=user_id)
     else:
         recipients = await get_participants_user_ids(exclude_tg_id=user_id)

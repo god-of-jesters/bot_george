@@ -38,7 +38,7 @@ async def show_all_files():
 
 async def show_all_complaints():
     async with aiosqlite.connect(DB_PATH) as db:
-        c = await db.execute("SELECT * FROM audit_log")
+        c = await db.execute("SELECT * FROM complaints")
         r = await c.fetchall()
         print(r)
 
@@ -49,3 +49,4 @@ async def show_all_reiting():
         print(r)
 
 asyncio.run(add())
+#asyncio.run(show_all_users())
