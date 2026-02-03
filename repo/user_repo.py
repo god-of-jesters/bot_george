@@ -223,3 +223,15 @@ async def get_users_by_team(team_number: int):
         )
         for row in rows
     ]
+
+async def add_rating(user_id: int, amount: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("UPDATE ratings SET total_points = total_points + ? WHERE badge_number = ?;", (amount, user_id))
+        cursor = await db.execute("UPDATE ratings SET bonuses_sum = bonuses_sum + ? WHERE badge_number = ?;", (amount, user_id))
+        await db.commit()
+
+async def subtract_rating(user_id: int, amount: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("UPDATE ratings SET total_points = total_points - ? WHERE badge_number = ?;", (amount, user_id))
+        cursor = await db.execute("UPDATE ratings SET penalties_sum = penalties_sum + ? WHERE badge_number = ?;", (amount, user_id))
+        await db.commit()

@@ -20,6 +20,7 @@ class MainMenu(StatesGroup):
     student_help = State()
     message_to_admin = State()
     message_to_rating_team = State()
+    manage_rooms = State()
 
 class ComplaintProcess(StatesGroup):
     waiting_for_complaint_text = State()
@@ -52,3 +53,8 @@ class RatingCSV(StatesGroup):
     waiting_for_upload_choice = State()
     waiting_for_export_choice = State()
     waiting_for_csv = State()
+
+class Rating(StatesGroup):
+    waiting_for_badge_number = State()
+    waiting_for_choice = State()
+    waiting_for_amount = State()
