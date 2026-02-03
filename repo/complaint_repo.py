@@ -152,3 +152,16 @@ async def get_room_problems() -> list[Complaint]:
         cursor = await db.execute('SELECT * FROM complaints WHERE status = "room_problems"')
         rows = await cursor.fetchall()
     return [Complaint(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]) for row in rows]
+
+async def get_user_complaint_counter(tg_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT COUNT(*)
+            FROM complaints_counter
+            WHERE user_id = ? AND complaint_id != 0
+            """,
+            (tg_id,)
+        )
+        result = await cursor.fetchone()
+        return result[0]

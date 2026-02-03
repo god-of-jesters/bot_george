@@ -153,6 +153,16 @@ async def init_db():
         );
         """)
 
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS complaints_counter (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            complaint_id INTEGER NOT NULL DEFAULT 0,
+            date_created TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(tg_id) ON DELETE CASCADE
+        );
+        """)
+
         await db.commit()
 
 
