@@ -1,6 +1,7 @@
 from database import DB_PATH, MESSAGES
 import aiosqlite
 from entityes.message import Message
+from datetime import datetime, timedelta
 
 async def add_message(message: Message):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -102,9 +103,72 @@ async def get_new_messages() -> list[Message]:
         for row in rows
     ]
 
-async def update_status(id: int):
+async def get_latest_message_by_user(user_id: int) -> Message | None:
+    """
+    Получить самое позднее сообщение для конкретного пользователя (по user_id).
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """
+            SELECT *
+            FROM messages
+            WHERE user_id = ?
+            ORDER BY date_created DESC, id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+
+    if not row:
+        return None
+
+    return Message(
+        id=row["id"],
+        user_id=row["user_id"],
+        adresat=row["adresat"],
+        badge_number=row["badge_number"],
+        text=row["text"],
+        status=row["status"],
+        date_created=row["date_created"],
+    )
+
+async def update_status(id: int, status: str):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            'UPDATE messages SET status = "answered" WHERE id = ?', (id, )
+            'UPDATE messages SET status = ? WHERE id = ?', (status, id, )
         )
         await db.commit()
+    
+async def update_status_skip_new():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            'UPDATE messages SET status = "new" WHERE status = "skip"'
+        )
+        await db.commit()
+
+def _parse_sqlite_dt(s: str) -> datetime | None:
+    if not s:
+        return None
+    # SQLite datetime('now') обычно даёт "YYYY-MM-DD HH:MM:SS"
+    try:
+        return datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        pass
+    # если вдруг ISO
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+async def get_message_access(user_id: int, minutes: int = 30) -> bool:
+    last_msg = await get_latest_message_by_user(user_id)
+    if not last_msg or not last_msg.date_created:
+        return True
+
+    last_dt = _parse_sqlite_dt(last_msg.date_created)
+    if not last_dt:
+        return True
+
+    return datetime.now() - last_dt >= timedelta(minutes=minutes)

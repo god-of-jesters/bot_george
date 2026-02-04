@@ -27,15 +27,21 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tg_id INTEGER UNIQUE,
+            username TEXT,
             fio TEXT,
             role TEXT NOT NULL DEFAULT 'participant',
             team_number INTEGER,
-            badge_number INTEGER,
+            badge_number INTEGER UNIQUE,
             reiting INTEGER NOT NULL DEFAULT 0,
             balance INTEGER NOT NULL DEFAULT 0,
             date_registered TEXT
         );
         """)
+        # миграция: добавляем колонку username, если её ещё нет
+        cursor = await db.execute("PRAGMA table_info(users);")
+        user_columns = {row[1] for row in await cursor.fetchall()}
+        if "username" not in user_columns:
+            await db.execute("ALTER TABLE users ADD COLUMN username TEXT;")
         await db.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_users_badge_number
         ON users(badge_number);
@@ -162,6 +168,28 @@ async def init_db():
             FOREIGN KEY (user_id) REFERENCES users(tg_id) ON DELETE CASCADE
         );
         """)
+    
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS families (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            first INTEGER,
+            second INTEGER,
+            second_name TEXT,
+            FOREIGN KEY (first) REFERENCES users(badge_number) ON DELETE CASCADE,
+            FOREIGN KEY (second) REFERENCES users(badge_number) ON DELETE CASCADE
+        );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target_badge INTEGER NOT NULL,
+            points INTEGER NOT NULL,
+            reason TEXT,
+            status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'approved', 'rejected')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        """)
 
         await db.commit()
 
@@ -170,17 +198,19 @@ async def load_datastore():
     await init_db()
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT tg_id, fio, team_number, role, badge_number, reiting, balance, date_registered FROM users;"
+            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, date_registered FROM users;"
         )
         for row in await cursor.fetchall():
             user = User(
                 tg_id=row[0],
-                fio=row[1],
-                team_number=row[2],
-                role=row[3],
-                badge_number=row[4],
-                reiting=row[5],
-                balance=row[6]
+                username=row[1],
+                fio=row[2],
+                team_number=row[3],
+                role=row[4],
+                badge_number=row[5],
+                reiting=row[6],
+                balance=row[7],
+                date_registered=row[8],
             )
             USERS[user.tg_id] = user
 

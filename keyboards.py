@@ -1,4 +1,9 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from aiogram.filters.callback_data import CallbackData
+
+class DecisionCb(CallbackData, prefix="dec"):
+    action: str   # "ok" | "no"
+    req_id: int
 
 def get_registration_keyboard():
     keyboard = InlineKeyboardBuilder()
@@ -9,11 +14,10 @@ def get_registration_keyboard():
 def get_job_title_keyboard():
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="Организаторы", callback_data="organizer")
-    keyboard.button(text="Команда рейтинга", callback_data="rating_team")
+    keyboard.button(text="Рейтинг", callback_data="rating_team")
     keyboard.button(text="РПГ", callback_data="rpg_organizers")
-    keyboard.button(text="Администраторы по комнатам", callback_data="room_administrators")
+    keyboard.button(text="Администраторы", callback_data="room_administrators")
     keyboard.button(text="Медиа", callback_data="media_team")
-    keyboard.button(text="Главный организатор", callback_data="chief_organizer")
     keyboard.adjust(2)
     return keyboard.as_markup()
 
@@ -59,6 +63,7 @@ def get_main_menu_admins_keyboard():
     keyboard.button(text="Профиль", callback_data="profile")
     keyboard.button(text="Комантные обращения", callback_data="manage_rooms")
     keyboard.button(text="Рассылка", callback_data="mailing")
+    keyboard.button(text="Подать жалобу", callback_data="complaint")
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
     keyboard.button(text="Помощь", callback_data="help")
     keyboard.adjust(2)
@@ -82,6 +87,7 @@ def get_main_menu_media_team_keyboard():
     keyboard.button(text="Профиль", callback_data="profile")
     keyboard.button(text="Рассылка", callback_data="mailing")
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
+    keyboard.button(text="Отправить жалобу", callback_data="complaint")
     keyboard.button(text="Помощь", callback_data="help")
     keyboard.adjust(2)
     return keyboard.as_markup()
@@ -245,7 +251,9 @@ def get_student_tasks_keyboard():
 
 def get_student_zags_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.button(text='ЗАГС', callback_data='zags')
+    kb.button(text='Посмотреть пары', callback_data='families')
+    kb.button(text='Свадьба', callback_data='married')
+    kb.button(text='Усыновить/удочерить', callback_data='take_son')
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(1)
     return kb.as_markup()
@@ -260,9 +268,10 @@ def get_room_admins_complaints():
 
 def get_maling_adresat():
     kb = InlineKeyboardBuilder()
-    kb.button('Участнику или организатору', callback_data='user')
-    kb.button('Команде', callback_data='team')
-    kb.button('Треку', callback_data='trek')
+    kb.button(text='Участнику или организатору', callback_data='user')
+    kb.button(text='Команде', callback_data='team')
+    kb.button(text='Треку', callback_data='trek')
+    kb.button(text='Всем', callback_data='all')
     kb.adjust(1)
     return kb.as_markup()
 
@@ -271,4 +280,18 @@ def get_rating_choice_keyboard():
     kb.button(text='Начислить', callback_data='add')
     kb.button(text='Штраф', callback_data='subtract')
     kb.adjust(1)
+    return kb.as_markup()
+
+def get_message_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Просмотрено', callback_data='seen')
+    kb.button(text='Пропустить', callback_data='skip')
+    kb.adjust(1)
+    return kb.as_markup()
+
+def decision_kb(req_id: int):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Согласиться", callback_data=DecisionCb(action="ok", req_id=req_id).pack())
+    kb.button(text="Не согласиться", callback_data=DecisionCb(action="no", req_id=req_id).pack())
+    kb.adjust(2)
     return kb.as_markup()

@@ -195,3 +195,19 @@ async def get_user_complaint_counter(tg_id: int) -> int:
         )
         result = await cursor.fetchone()
         return result[0]
+
+async def create_point_request(
+    target_badge: int,
+    points: int,
+    reason: str | None = None,
+) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            INSERT INTO requests (target_badge, points, reason)
+            VALUES (?, ?, ?)
+            """,
+            (target_badge, points, reason),
+        )
+        await db.commit()
+        return cursor.lastrowid

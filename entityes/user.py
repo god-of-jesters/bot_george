@@ -1,9 +1,20 @@
-from dataclasses import dataclass
 from datetime import datetime
 
 class User:
-    def __init__(self, tg_id: int, fio: str = None, team_number: int = None, role: str = None, badge_number: int = None, reiting: int = None, date_registered: str = None, balance: int = None):
+    def __init__(
+        self,
+        tg_id: int,
+        username: str | None = None,
+        fio: str = None,
+        team_number: int = None,
+        role: str = None,
+        badge_number: int = None,
+        reiting: int = None,
+        date_registered: str = None,
+        balance: int = None,
+    ):
         self.tg_id = tg_id
+        self.username = username
         self.fio = fio
         self.team_number = team_number
         self.role = role
@@ -19,6 +30,7 @@ class User:
         return other.fio == self.fio and self.badge_number == other.badge_number
     
     def update(self, new_user: 'User'):
+        self.username = new_user.username
         self.fio = new_user.fio
         self.team_number = new_user.team_number
         self.role = new_user.role
