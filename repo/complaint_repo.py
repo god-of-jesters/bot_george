@@ -79,17 +79,53 @@ async def delete_complaint(complaint_id: int):
         if complaint_id in COMPLAINTS:
             del COMPLAINTS[complaint_id]
 
-async def get_user_complaints(user_id: int) -> list[Complaint]:
+async def get_user_complaints(tg_id: int) -> list[Complaint]:
+    if not tg_id:
+        return []
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT * FROM complaints WHERE user_id=?", (user_id))
-        row = await cursor.fetchall()
-        return [Complaint(row[0], )]
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, user_id, adresat, violetion, description, date_created, date_resolved, status, execution "
+            "FROM complaints WHERE user_id = ?;",
+            (tg_id,)
+        )
+        rows = await cursor.fetchall()
+        complaints = []
+        for row in rows:
+            c = Complaint(
+                complaint_id=row["id"],
+                user_id=row["user_id"],
+                adresat=row["adresat"],
+                violetion=row["violetion"],
+                description=row["description"],
+                status=row["status"],
+                execution=row["execution"],
+            )
+            c.date_created = row["date_created"]
+            c.date_resolved = row["date_resolved"]
+            complaints.append(c)
+        return complaints
 
 async def get_room_problems() -> list[Complaint]:
     async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
         cursor = await db.execute('SELECT * FROM complaints WHERE status = "room_problems"')
         rows = await cursor.fetchall()
-    return rows
+    result = []
+    for r in rows:
+        c = Complaint(
+            complaint_id=r["id"],
+            user_id=r["user_id"],
+            adresat=r["adresat"],
+            violetion=r["violetion"],
+            description=r["description"],
+            status=r["status"],
+            execution=r["execution"],
+        )
+        c.date_created = r["date_created"]
+        c.date_resolved = r["date_resolved"]
+        result.append(c)
+    return result
 
 async def get_oldest_complaint() -> Complaint:
     async with aiosqlite.connect(DB_PATH) as db:
@@ -146,12 +182,6 @@ async def get_oldest_complaint() -> Complaint:
                 execution=row["execution"],
             )
         return None
-
-async def get_room_problems() -> list[Complaint]:
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute('SELECT * FROM complaints WHERE status = "room_problems"')
-        rows = await cursor.fetchall()
-    return [Complaint(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]) for row in rows]
 
 async def get_user_complaint_counter(tg_id: int) -> int:
     async with aiosqlite.connect(DB_PATH) as db:

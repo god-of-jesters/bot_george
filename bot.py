@@ -224,7 +224,7 @@ async def main_menu_callback(message: Message, state: FSMContext):
                 await state.set_state(MainMenu.main_menu_rating_team) 
             case "Медиа":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
-                await state.set_state(MainMenu.main_menu_media_team)
+                await state.set_state(MainMenu.main_menu_media)
             case "Главный организатор":
                 await message.answer("Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
                 await state.set_state(MainMenu.main_menu_chief_organizer)
@@ -238,6 +238,7 @@ async def cmd_teg(message: Message):
 async def cmd_exit(message: Message):
     await message.answer("Вы вышли из бота. Для регистрации введите команду /start")
     active_sessions.pop(message.from_user.id)
+    await del_from_active(message.from_user.id)
 
 """MAIN MENUS"""
 
@@ -263,11 +264,13 @@ async def show_profile(callback_query: CallbackQuery, state: FSMContext):
         case "my_complaints":
             s = ''
             complaints = await get_user_complaints(user_id)
-            for i, com in enumerate(complaintes):
-                s += str(i) + '.\n'
-                s += 'На: ' + com.adresat + '\n'
-                s += com.description
-            await callback_query.message.answer()
+            for i, com in enumerate(complaints):
+                adr = await get_user_by_badge(com.adresat) if com.adresat else None
+                adr_name = adr.fio if adr else f"бейдж {com.adresat}" if com.adresat else "—"
+                s += str(i + 1) + '.\n'
+                s += 'На: ' + adr_name + '\n'
+                s += com.description + '\n\n'
+            await callback_query.message.answer(s or "У вас пока нет жалоб.", reply_markup=get_profile_keyboard())
         case "entertainment":
             await state.set_state(MainMenu.student_entertainment)
             await callback_query.message.answer("Развлечения.", reply_markup=get_student_entertainment_keyboard())
@@ -302,8 +305,12 @@ async def show_main_organizer(callback_query: CallbackQuery, state: FSMContext):
             if complaints:
                 await callback_query.message.answer("Жалобы в работе.")
                 for complaint in complaints:
-                    user = await get_user(complaint.user_id)
-                    await callback_query.message.answer(f"Статус: {complaint.status}\nДата создания: {complaint.date_created}\nНомер бейджа: {user.badge_number}\nЖалоба: {complaint.description}\n")
+                    author = await get_user(complaint.user_id)
+                    adr = await get_user_by_badge(complaint.adresat) if complaint.adresat else None
+                    adr_str = adr.fio if adr else f"бейдж {complaint.adresat}" if complaint.adresat else "—"
+                    await callback_query.message.answer(
+                        f"Статус: {complaint.status}\nДата: {complaint.date_created}\nНа: {adr_str}\nЖалоба: {complaint.description}\n"
+                    )
             else:
                 await callback_query.message.answer("Жалобы в работе не найдены.")
                 await show_main_menu(callback_query.bot, user_id, state)
@@ -373,11 +380,16 @@ async def show_main_admins(callback_query: Message, state: FSMContext):
             await state.set_state(MainMenu.profile)
 
         case "manage_rooms":
-            complaint = await get_room_problems()
-            if complaint:
+            complaints = await get_room_problems()
+            if complaints:
+                complaint = complaints[0]
                 al[user_id] = complaint
-                user = await get_user(complaint.user_id)
-                await callback_query.message.answer(f"Статус: {complaint.status}\nДата создания: {complaint.date_created}\nНомер бейджа: {user.badge_number}\nЖалоба: {complaint.description}\n")
+                author = await get_user(complaint.user_id)
+                adr = await get_user_by_badge(complaint.adresat) if complaint.adresat else None
+                adr_str = adr.fio if adr else f"бейдж {complaint.adresat}" if complaint.adresat else "—"
+                await callback_query.message.answer(
+                    f"Статус: {complaint.status}\nДата: {complaint.date_created}\nОт: {author.fio if author else '—'}\nЖалоба: {complaint.description}\n"
+                )
                 await state.set_state(MainMenu.manage_rooms)
             else:
                 await callback_query.message.answer("Комнатные обращения не найдены.")
@@ -414,8 +426,12 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
             if complaint:
                 al[user_id] = complaint
                 await send_complaint_files(callback_query.bot, user_id, complaint.complaint_id)
-                await callback_query.message.answer(f"Статус: {complaint.status}\nДата создания: {complaint.date_created}\nНа: {complaint.adresat}\nЖалоба: {complaint.description}\n \
-                                                    Тип жалобы: {complaint.violetion}", reply_markup=get_yes_no_keyboard())
+                adr = await get_user_by_badge(complaint.adresat) if complaint.adresat else None
+                adr_str = adr.fio if adr else f"бейдж {complaint.adresat}" if complaint.adresat else "—"
+                await callback_query.message.answer(
+                    f"Статус: {complaint.status}\nДата создания: {complaint.date_created}\nНа: {adr_str}\nЖалоба: {complaint.description}\nТип жалобы: {complaint.violetion}",
+                    reply_markup=get_yes_no_keyboard()
+                )
                 await state.set_state(ComplaintReview.main)
             else:
                 await callback_query.message.answer(f'Пока что нет жалоб.')
@@ -570,8 +586,11 @@ async def finish_complaint_cb(callback: CallbackQuery, state: FSMContext):
 
 
     if complaint.status == "alert":
-            await notify_all_reiting_team(callback.message.bot, complaintes[user_id], state)
-
+        await notify_all_reiting_team(callback.message.bot, complaintes[user_id], state)
+        await send_complaint_notify(callback.bot, complaint)
+    if complaint.status == 'soon':
+        await notify_persone(callback.bot, complaint, state)
+    
     if user_id in complaintes:
         del complaintes[user_id]
 
@@ -593,7 +612,7 @@ async def process_complaint_callback(callback_query: Message, state: FSMContext)
         complaints_adresat[user_id] = roles[data]
     if roles[data] != 'Участник' and roles[data] != 'Организатор':
         complaintes[user_id].status = data
-        complaintes[user_id].badge_number = 0
+        complaintes[user_id].adresat = 0
         await callback_query.message.answer("Введите текст жалобы, если проблемы с комнатой то укажите в тексте\
             её номер, если что-то другое, то как можно подробнее опишите проблему.")
         await state.set_state(ComplaintProcess.waiting_for_complaint_text)
@@ -721,6 +740,7 @@ async def skip_files(message: Message, state: FSMContext):
 
     if complaint.status == "alert":
         await notify_all_reiting_team(message.bot, complaint, state)
+        await send_complaint_notify(message.bot, complaint)
     if complaint.status == 'soon':
         await notify_persone(message.bot, complaint, state)
 
@@ -1087,7 +1107,10 @@ async def process_fio(message: Message, state: FSMContext):
         return
     if existing_user.tg_id != user_id:
         await update_tg_id(registration[user_id].badge_number, user_id) 
-    
+        try:
+            await del_from_active(existing_user.tg_id)
+        except csv.Error:
+            print("Ну нет так нет")
     try:
         active_sessions[user_id] = USERS[user_id]
     except KeyError:
@@ -1452,7 +1475,6 @@ async def select_upload_csv_type(callback_query: CallbackQuery, state: FSMContex
 
     await callback_query.message.answer(prompt)
 
-
 @router.message(RatingCSV.waiting_for_csv, F.document)
 async def upload_reiting_file(message: Message, state: FSMContext):
     user = await get_user(message.from_user.id)
@@ -1777,10 +1799,7 @@ async def show_main_menu(bot: Bot, user_id: int, state: FSMContext):
                 await state.set_state(MainMenu.main_menu_rating_team)
             case "Медиа":
                 await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_media_team_keyboard())
-                await state.set_state(MainMenu.main_menu_media_team)
-            case "Главный организатор":
-                await bot.send_message(chat_id=user_id, text="Главное меню.", reply_markup=get_main_menu_chief_organizer_keyboard())
-                await state.set_state(MainMenu.main_menu_chief_organizer)
+                await state.set_state(MainMenu.main_menu_media)
 
 async def send_complaint_files(bot: Bot, chat_id: int, complaint_id: int):
     rows = await get_files_by_complaint_id(complaint_id)
@@ -1869,6 +1888,45 @@ async def notify_persone_room_problems(bot: Bot, complaint: Complaint, desicion:
         {complaint.description}')
     await show_main_menu(bot, complaint.user_id, state)
 
+async def send_complaint_notify(bot: Bot, complaint: Complaint):
+    fr = await get_user(complaint.user_id)
+    adr = await get_user_by_badge(complaint.adresat)
+    target_tg_id = adr.tg_id if adr else None
+
+    if complaint.complaint_id and target_tg_id is not None:
+        rows = await get_files_by_complaint_id(complaint.complaint_id)
+        for r in rows:
+            tg_file_id = r["tg_file_id"]
+            mime = (r["mime_type"] or "").lower()
+            if mime.startswith("video"):
+                await bot.send_video(target_tg_id, tg_file_id)
+            else:
+                await bot.send_photo(target_tg_id, tg_file_id)
+    
+    fine = violetion_vines.get(complaint.violetion, 0)
+    if adr is None:
+        return
+    
+    if adr.role == 'Участник':
+        if target_tg_id is not None:
+            await bot.send_message(
+                target_tg_id,
+                "На вас пришла срочная жалоба от участника.\n"
+                f"Время жалобы: {complaint.date_created}.\n"
+                f"Категория жалобы: {complaint.violetion}.\n"
+                f"Описание: {complaint.description}",
+            )
+    else:
+        if target_tg_id is not None:
+            await bot.send_message(
+                target_tg_id,
+                "На вас пришла срочная жалоба от организатора.\n"
+                f"Время жалобы: {complaint.date_created}.\n"
+                f"Штраф: {fine}.\n"
+                f"Категория жалобы: {complaint.violetion}.\n"
+                f"Описание: {complaint.description}",
+            )
+    
 
 async def main():
     global bot_instance

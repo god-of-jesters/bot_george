@@ -206,19 +206,20 @@ async def load_datastore():
             TEAMS[team.team_number] = team
 
         cursor = await db.execute(
-            "SELECT id, user_id, adresat, description, date_created, date_resolved, status, execution FROM complaints;"
+            "SELECT id, user_id, adresat, violetion, description, date_created, date_resolved, status, execution FROM complaints;"
         )
         for row in await cursor.fetchall():
             complaint = Complaint(
                 complaint_id=row[0],
                 user_id=row[1],
                 adresat=row[2],
-                description=row[3],
-                status=row[6],
-                execution=row[7]
+                violetion=row[3],
+                description=row[4],
+                status=row[7],
+                execution=row[8]
             )
-            complaint.date_created = row[4]
-            complaint.date_resolved = row[5]
+            complaint.date_created = row[5]
+            complaint.date_resolved = row[6]
 
             file_cursor = await db.execute(
                 "SELECT id FROM files WHERE complaint_id = ?;",

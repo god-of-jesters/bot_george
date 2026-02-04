@@ -235,3 +235,8 @@ async def subtract_rating(user_id: int, amount: int):
         cursor = await db.execute("UPDATE ratings SET total_points = total_points - ? WHERE badge_number = ?;", (amount, user_id))
         cursor = await db.execute("UPDATE ratings SET penalties_sum = penalties_sum + ? WHERE badge_number = ?;", (amount, user_id))
         await db.commit()
+
+async def del_from_active(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM active WHERE user_id = ?;", (user_id, ))
+        await db.commit()

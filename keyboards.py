@@ -252,17 +252,17 @@ def get_student_zags_keyboard():
 
 def get_room_admins_complaints():
     kb = InlineKeyboardBuilder()
-    kb.button(text='Новые', case='new')
-    kb.button(text='В работе', case='working')
-    kb.button(text='Завершенные', case='done')
+    kb.button(text='Новые', callback_data='new')
+    kb.button(text='В работе', callback_data='working')
+    kb.button(text='Завершенные', callback_data='done')
     kb.adjust(1)
     return kb.as_markup()
 
 def get_maling_adresat():
     kb = InlineKeyboardBuilder()
-    kb.button('Участнику/организатору', case='user')
-    kb.button('Команде', case='team')
-    kb.button('Треку', case='trek')
+    kb.button('Участнику или организатору', callback_data='user')
+    kb.button('Команде', callback_data='team')
+    kb.button('Треку', callback_data='trek')
     kb.adjust(1)
     return kb.as_markup()
 

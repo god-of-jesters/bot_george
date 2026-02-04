@@ -4,7 +4,7 @@ class Complaint:
     def __init__(self, complaint_id: int = None, user_id: int = None, adresat: int = None, violetion: str = None, description: str = None, status: str = None, execution: str = None, files: list[int] = None):
         self.complaint_id = complaint_id
         self.user_id = user_id
-        self.adresat = adresat
+        self.adresat = adresat  # badge_number адресата жалобы
         self.violetion = violetion
         self.description = description
         self.date_created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
