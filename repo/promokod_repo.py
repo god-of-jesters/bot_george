@@ -63,3 +63,19 @@ async def update_promokod(promokod_id: int, bonus: int, amount: int) -> int:
         )
         await db.commit()
         return cursor.rowcount
+
+async def get_promo_by_pharse(phrase: str) -> Promokod:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+                """
+                SELECT id, amount, bonus, badge_number
+                FROM promokodes
+                WHERE phrase = ?;
+                """,
+                (phrase,),
+            )
+        row = await cur.fetchone()
+        if row:
+            if row[1] > 0:
+                return Promokod(row[0], phrase, row[1], row[2], row[3])
+        return

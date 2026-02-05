@@ -108,11 +108,10 @@ async def init_db():
         );
         """)
 
-        await db.execute("""
-        CREATE TABLE IF NOT EXISTS sells (
+        await db.execute("""CREATE TABLE IF NOT EXISTS sells (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             badge_number INTEGER,
-            poduct_id INTEGER,
+            product_id INTEGER,
             date_created TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (badge_number) REFERENCES users(badge_number),
             FOREIGN KEY (product_id) REFERENCES products(id)
@@ -205,6 +204,7 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first INTEGER,
             second INTEGER,
+            first_name TEXT,
             second_name TEXT,
             FOREIGN KEY (first) REFERENCES users(badge_number) ON DELETE CASCADE,
             FOREIGN KEY (second) REFERENCES users(badge_number) ON DELETE CASCADE
@@ -213,6 +213,17 @@ async def init_db():
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target_badge INTEGER NOT NULL,
+            points INTEGER NOT NULL,
+            reason TEXT,
+            status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'approved', 'rejected')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             target_badge INTEGER NOT NULL,
             points INTEGER NOT NULL,

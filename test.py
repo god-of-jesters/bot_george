@@ -50,5 +50,5 @@ async def show_all_reiting():
         r = await c.fetchall()
         print(r)
 
-asyncio.run(add())
+#asyncio.run(add())
 asyncio.run(show_all_users())

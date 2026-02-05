@@ -66,8 +66,30 @@ class PromoCreate(StatesGroup):
     waiting_for_phrase = State()
     waiting_for_amount = State()
     waiting_for_bonus = State()
+    waiting_for_phrase_user = State()
 
 class Bonus(StatesGroup):
     waiting_adresat = State()
     waiting_number = State()
     waiting_amount = State()
+
+class Products(StatesGroup):
+    wait_choice_action = State()
+    wait_for_product_name = State()
+    wait_choice_edit = State()
+    wait_for_product_name_add = State()
+    wait_for_product_cost = State()
+    wait_for_product_amount = State()
+    wait_for_edit_value = State()
+
+class Shop(StatesGroup):
+    wait_for_choice_action = State()
+    wait_for_buy_choice = State()
+    wait_for_user_data = State()
+    wait_for_product_number = State()
+    wait_complite_buy = State()
+
+class ZAGS(StatesGroup):
+    waiting_for_choice = State()
+    waiting_for_badge = State()
+    waiting_for_fio = State()

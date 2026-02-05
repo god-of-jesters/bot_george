@@ -102,3 +102,83 @@ async def list_products() -> list[Product]:
         PRODUCTS[p.id] = p
         PRODUCT_NAME_INDEX[p.name] = p.id
     return result
+
+async def get_products_shop() -> list[str]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT id, name, cost, amount
+            FROM products
+            WHERE amount > 0
+            ORDER BY id;
+            """
+        )
+        rows = await cursor.fetchall()
+
+    lines = [
+        f"{pid}. {name} Цена: {cost} Количество: {amount}"
+        for pid, name, cost, amount in rows
+    ]
+
+    result: list[str] = []
+    for i in range(0, len(lines), 10):
+        result.append("\n".join(lines[i:i + 10]))
+
+    return result
+
+async def product_sold(product_id: int, buyer_badge_number: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("PRAGMA foreign_keys=ON;")
+        await db.execute("BEGIN IMMEDIATE;")
+
+        cur = await db.execute(
+            "SELECT amount FROM products WHERE id = ?;",
+            (product_id,)
+        )
+        row = await cur.fetchone()
+        if not row:
+            await db.execute("ROLLBACK;")
+            return False
+
+        amount = row[0] if row[0] is not None else 0
+        if amount <= 0:
+            await db.execute("ROLLBACK;")
+            return False
+
+        await db.execute(
+            "UPDATE products SET amount = amount - 1 WHERE id = ?;",
+            (product_id,)
+        )
+
+        await db.execute(
+            "INSERT INTO sells (badge_number, product_id) VALUES (?, ?);",
+            (buyer_badge_number, product_id)
+        )
+
+        await db.commit()
+
+    return True
+
+async def get_my_purchases(badge_number: int) -> str:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT
+                s.id,
+                p.name,
+                s.date_created
+            FROM sells s
+            JOIN products p ON p.id = s.product_id
+            WHERE s.badge_number = ?
+            ORDER BY s.date_created DESC;
+            """,
+            (badge_number,),
+        )
+        rows = await cursor.fetchall()
+    if not rows:
+        return ''
+
+    return "\n".join(
+        f"{row[1]} {row[2]}"
+        for row in rows
+    )

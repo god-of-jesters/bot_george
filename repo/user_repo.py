@@ -371,3 +371,61 @@ async def get_admins() -> list[User]:
         )
         for row in rows
     ]
+
+async def add_bonus(badge_number: int, bonus: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users "
+            "SET balance = balance + ? "
+            "WHERE badge_number = ?;",
+            (bonus, badge_number),
+        )
+        await db.commit()
+
+async def buy_product(cost: int, badge_number: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users "
+            "SET balance = balance - ? "
+            "WHERE badge_number = ?;",
+            (cost, badge_number),
+        )
+        await db.commit()
+
+async def get_rpg_users() -> list[User]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            'SELECT * FROM users WHERE role = ?;',
+            ('РПГ',),
+        )
+        rows = await cursor.fetchall()
+
+    return [
+        User(
+            tg_id=row["tg_id"],
+            username=row["username"],
+            fio=row["fio"],
+            team_number=row["team_number"],
+            role=row["role"],
+            badge_number=row["badge_number"],
+            reiting=row["reiting"],
+            balance=row["balance"],
+            gender=row["gender"],
+            date_registered=row["date_registered"],
+        )
+        for row in rows
+    ]
+
+async def get_user_balance(badge_number: int) -> int | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT balance FROM users WHERE badge_number = ?;",
+            (badge_number,),
+        )
+        row = await cursor.fetchone()
+
+    if not row:
+        return None
+
+    return row[0]

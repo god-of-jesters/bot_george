@@ -56,11 +56,12 @@ def get_main_menu_rpg_organizer_keyboard():
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="Профиль", callback_data="profile")
     keyboard.button(text="Редактировать товар", callback_data="edit_products")
-    keyboard.button(text="Получить таблицу покупок", callback_data="get_sells")
+    keyboard.button(text="Получить продажи", callback_data="get_sells")
+    keyboard.button(text="Получить товары", callback_data="get_products")
     keyboard.button(text="Начислить валюту", callback_data="bonus")
     keyboard.button(text="Создать промокод", callback_data="create_promo")
     keyboard.button(text="Подать жалобу", callback_data="complaint")
-    keyboard.button(text='Рассылка', callback_data='maling')
+    keyboard.button(text='Рассылка', callback_data='m')
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
     keyboard.button(text="Помощь", callback_data="help")
     keyboard.adjust(2)
@@ -228,7 +229,6 @@ def get_edit_badge_keyboard():
 def get_student_entertainment_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text='Магазин', callback_data='shop')
-    kb.button(text='Задания', callback_data='tasks')
     kb.button(text='ЗАГС', callback_data='zags')
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(2)
@@ -250,10 +250,27 @@ def get_main_menu_keyboard():
 
 def get_student_shop_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.button(text='Купить себе', callback_data='buy_for_myself')
-    kb.button(text='Подарить', callback_data='give_to_friend')
+    kb.button(text='Товары и услуги', callback_data='products')
+    kb.button(text='Мои покупки', callback_data='my_buy')
+    kb.button(text='Задания', callback_data='tasks')
+    kb.button(text='Ввести промокод', callback_data='give_promo')
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(2)
+    return kb.as_markup()
+
+def get_buy_choice():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Купить себе', callback_data='for_me')
+    kb.button(text='Подарить', callback_data='gift')
+    kb.button(text='Назад', callback_data='back_to_main_menu')
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_buy_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Приобрести', callback_data='buy')
+    kb.button(text='Отказаться', callback_data='cancel')
+    kb.adjust(1)
     return kb.as_markup()
 
 def get_student_tasks_keyboard():
@@ -265,9 +282,7 @@ def get_student_tasks_keyboard():
 
 def get_student_zags_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.button(text='Посмотреть пары', callback_data='families')
     kb.button(text='Свадьба', callback_data='married')
-    kb.button(text='Усыновить/удочерить', callback_data='take_son')
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(1)
     return kb.as_markup()
@@ -316,4 +331,27 @@ def decision_kb(req_id: int):
     kb.button(text="Согласиться", callback_data=DecisionCb(action="ok", req_id=req_id).pack())
     kb.button(text="Не согласиться", callback_data=DecisionCb(action="no", req_id=req_id).pack())
     kb.adjust(2)
+    return kb.as_markup()
+
+def get_edit_product_choice():
+    kb = InlineKeyboardBuilder()
+    kb.button(text='Добавить товар', callback_data='add')
+    kb.button(text='Редактировать товар', callback_data='update')
+    kb.button(text='Удалить товар', callback_data='del')
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_product_edit_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Изменить название", callback_data="name")
+    kb.button(text="Изменить цену", callback_data="cost")
+    kb.button(text="Изменить количество", callback_data="amount")
+    kb.adjust(1)
+    return kb.as_markup()
+
+def get_married_second_name():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Оставить мою", callback_data="mine")
+    kb.button(text="Оставить его/ее", callback_data="his")
+    kb.adjust(1)
     return kb.as_markup()
