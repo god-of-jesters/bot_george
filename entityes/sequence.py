@@ -59,3 +59,5 @@ class Rating(StatesGroup):
     waiting_for_badge_number = State()
     waiting_for_choice = State()
     waiting_for_amount = State()
+    waiting_for_amount_bonus = State()
+    waiting_for_badge_number_bonus = State()

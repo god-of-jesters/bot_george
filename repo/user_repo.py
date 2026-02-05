@@ -15,8 +15,11 @@ async def add_user(user: User):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """
-            INSERT INTO users (tg_id, username, fio, role, team_number, badge_number, reiting, balance, date_registered)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (
+                tg_id, username, fio, role, team_number,
+                badge_number, reiting, balance, gender, date_registered
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user.tg_id,
@@ -27,6 +30,7 @@ async def add_user(user: User):
                 user.badge_number,
                 user.reiting,
                 user.balance,
+                user.gender,
                 user.date_registered,
             ),
         )
@@ -38,8 +42,7 @@ async def get_user(tg_id: int) -> User | None:
         return USERS[tg_id]
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, date_registered "
-            "FROM users WHERE tg_id = ?;",
+            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, gender, date_registered FROM users",
             (tg_id,),
         )
         row = await cursor.fetchone()
@@ -53,7 +56,8 @@ async def get_user(tg_id: int) -> User | None:
                 badge_number=row[5],
                 reiting=row[6],
                 balance=row[7],
-                date_registered=row[8],
+                gender=row[8],
+                date_registered=row[9],
             )
             USERS[tg_id] = user
             return user
@@ -62,7 +66,7 @@ async def get_user(tg_id: int) -> User | None:
 async def get_all_users() -> list[User]:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, date_registered FROM users;"
+            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, gender, date_registered FROM users;"
         )
         rows = await cursor.fetchall()
         users = []
@@ -76,7 +80,8 @@ async def get_all_users() -> list[User]:
                 badge_number=row[5],
                 reiting=row[6],
                 balance=row[7],
-                date_registered=row[8],
+                gender=row[8],
+                date_registered=row[9],
             )
             users.append(user)
         return users
@@ -85,7 +90,7 @@ async def update_user(user: User):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
         UPDATE users
-        SET tg_id = ?, username = ?, fio = ?, role = ?, team_number = ?, reiting = ?, balance = ?, date_registered = ?
+        SET tg_id = ?, username = ?, fio = ?, role = ?, team_number = ?, reiting = ?, balance = ?, gender = ?, date_registered = ?
         WHERE badge_number = ?;
         """, (
             user.tg_id,
@@ -95,6 +100,7 @@ async def update_user(user: User):
             user.team_number,
             user.reiting,
             user.balance,
+            user.gender,
             user.date_registered,
             user.badge_number,
         ))
@@ -118,6 +124,7 @@ async def upsert_users_rows(rows: list[dict]) -> int:
                 badge_number=excluded.badge_number,
                 reiting=excluded.reiting,
                 balance=excluded.balance,
+                gender=excluded.balance,
                 date_registered=excluded.date_registered
             """,
             [
@@ -130,6 +137,7 @@ async def upsert_users_rows(rows: list[dict]) -> int:
                     r["badge_number"],
                     r["reiting"],
                     r["balance"],
+                    r['genger'],
                     r["date_registered"],
                 )
                 for r in rows
@@ -147,6 +155,7 @@ async def upsert_users_rows(rows: list[dict]) -> int:
             badge_number=r["badge_number"],
             reiting=r["reiting"],
             balance=r["balance"],
+            gender=r["gender"],
             date_registered=r["date_registered"],
         )
 
@@ -160,7 +169,7 @@ async def delete_user(badge_number: int):
 async def get_user_by_badge(badge_number: int) -> User | None:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, date_registered "
+            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, gender, date_registered "
             "FROM users WHERE badge_number = ?;",
             (badge_number,),
         )
@@ -175,7 +184,8 @@ async def get_user_by_badge(badge_number: int) -> User | None:
                 badge_number=row[5],
                 reiting=row[6],
                 balance=row[7],
-                date_registered=row[8],
+                gender=row[8],
+                date_registered=row[9],
             )
         return None
 
@@ -266,11 +276,11 @@ async def update_tg_id(badge_number: int, tg: int, username: str | None = None):
 async def get_user_by_fio(fio: str):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT tg_id, team_number, role, badge_number, reiting, balance, date_registered FROM users WHERE fio = ?;"
+            "SELECT tg_id, team_number, role, badge_number, reiting, balance, gender, date_registered FROM users WHERE fio = ?;"
         )
         row = await cursor.fetchone()
     if row:
-        return User(tg_id=row[0], fio=fio, team_number=row[1], role=row[2], badge_number=row[3], reiting=row[4], balance=row[5], date_registered=row[6])
+        return User(tg_id=row[0], fio=fio, team_number=row[1], role=row[2], badge_number=row[3], reiting=row[4], balance=row[5], gender=row[6], date_registered=row[7])
     else:
         return None
 
@@ -297,16 +307,16 @@ async def get_users_by_team(team_number: int):
         for row in rows
     ]
 
-async def add_rating(user_id: int, amount: int):
+async def add_rating(badge_number: int, amount: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("UPDATE ratings SET total_points = total_points + ? WHERE badge_number = ?;", (amount, user_id))
-        cursor = await db.execute("UPDATE ratings SET bonuses_sum = bonuses_sum + ? WHERE badge_number = ?;", (amount, user_id))
+        cursor = await db.execute("UPDATE ratings SET total_points = total_points + ? WHERE badge_number = ?;", (amount, badge_number))
+        cursor = await db.execute("UPDATE ratings SET bonuses_sum = bonuses_sum + ? WHERE badge_number = ?;", (amount, badge_number))
         await db.commit()
 
-async def subtract_rating(user_id: int, amount: int):
+async def subtract_rating(badge_number: int, amount: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("UPDATE ratings SET total_points = total_points - ? WHERE badge_number = ?;", (amount, user_id))
-        cursor = await db.execute("UPDATE ratings SET penalties_sum = penalties_sum + ? WHERE badge_number = ?;", (amount, user_id))
+        cursor = await db.execute("UPDATE ratings SET total_points = total_points - ? WHERE badge_number = ?;", (amount, badge_number))
+        cursor = await db.execute("UPDATE ratings SET penalties_sum = penalties_sum + ? WHERE badge_number = ?;", (amount, badge_number))
         await db.commit()
 
 async def update_reiting(badge_number: int, amount: int):
@@ -336,3 +346,28 @@ async def del_from_active(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM active WHERE user_id = ?;", (user_id, ))
         await db.commit()
+
+async def get_admins() -> list[User]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM users WHERE role = ?;",
+            ("Администратор",),
+        )
+        rows = await cursor.fetchall()
+
+    return [
+        User(
+            tg_id=row["tg_id"],
+            username=row["username"],
+            fio=row["fio"],
+            team_number=row["team_number"],
+            role=row["role"],
+            badge_number=row["badge_number"],
+            reiting=row["reiting"],
+            balance=row["balance"],
+            gender=row["gender"],
+            date_registered=row["date_registered"],
+        )
+        for row in rows
+    ]

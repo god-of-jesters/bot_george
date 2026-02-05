@@ -10,8 +10,9 @@ class User:
         role: str = None,
         badge_number: int = None,
         reiting: int = None,
-        date_registered: str = None,
         balance: int = None,
+        gender: str | None = None,
+        date_registered: str = None,
     ):
         self.tg_id = tg_id
         self.username = username
@@ -21,15 +22,14 @@ class User:
         self.badge_number = badge_number
         self.reiting = reiting
         self.balance = balance
-        self.date_registered = datetime.now().strftime("%Y-%m-%d %H:%M:%S") if date_registered is None else date_registered
-    
-    def __eq__(self, other):
-        if not isinstance(other, User):
-            return False
-        
-        return other.fio == self.fio and self.badge_number == other.badge_number
-    
-    def update(self, new_user: 'User'):
+        self.gender = gender
+        self.date_registered = (
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if date_registered is None
+            else date_registered
+        )
+
+    def update(self, new_user: "User"):
         self.username = new_user.username
         self.fio = new_user.fio
         self.team_number = new_user.team_number
@@ -37,3 +37,4 @@ class User:
         self.badge_number = new_user.badge_number
         self.reiting = new_user.reiting
         self.balance = new_user.balance
+        self.gender = new_user.gender

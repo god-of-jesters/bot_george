@@ -5,6 +5,10 @@ class DecisionCb(CallbackData, prefix="dec"):
     action: str   # "ok" | "no"
     req_id: int
 
+class RoomComplaintCb(CallbackData, prefix="rc"):
+    action: str   # "agree" | "disagree"
+    complaint_id: int
+
 def get_registration_keyboard():
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="Профиль", callback_data="profile")
@@ -75,6 +79,7 @@ def get_main_menu_rating_team_keyboard():
     keyboard.button(text="Жалобы", callback_data="view_complaints")
     keyboard.button(text="Участники", callback_data="participants")
     keyboard.button(text="Начисление и штрафы", callback_data="assign_rating")
+    keyboard.button(text="Поощрение", callback_data="bonus")
     keyboard.button(text="Входящие сообщения", callback_data="inbox_messages")
     keyboard.button(text="Отправить жалобу", callback_data="complaint")
     keyboard.button(text="Рассылка", callback_data="mailing")
@@ -105,8 +110,6 @@ def get_complaint_category_keyboard():
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="Срочно!", callback_data="alert")
     keyboard.button(text="В ближайщее время", callback_data="soon")
-    keyboard.button(text="Жалоба на комнату", callback_data="room_problems")
-    keyboard.button(text="Иное", callback_data="other_issues")
     keyboard.adjust(2)
     return keyboard.as_markup()
 
@@ -167,17 +170,24 @@ def get_violation_type_keyboard():
     kb.adjust(3)
     return kb.as_markup()
 
-def get_agree_disagree_keyboard():
+def get_agree_disagree_keyboard(complaint_id: int):
     kb = InlineKeyboardBuilder()
-    kb.button(text="Согласиться", callback_data="agree")
-    kb.button(text="Оспорить", callback_data="disagree")
-    kb.adjust(1)
+    kb.button(
+        text="Согласиться",
+        callback_data=RoomComplaintCb(action="agree", complaint_id=complaint_id).pack(),
+    )
+    kb.button(
+        text="Не согласиться",
+        callback_data=RoomComplaintCb(action="disagree", complaint_id=complaint_id).pack(),
+    )
+    kb.adjust(2)
     return kb.as_markup()
 
 def get_users_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text="Все участники", callback_data="all_users")
     kb.button(text='Изменить данные участника', callback_data="edit_user_data")
+    kb.button(text='Удалить участника', callback_data="del_user")
     kb.button(text="Назад в главное меню", callback_data="back_to_main_menu")
     kb.adjust(1)
     return kb.as_markup()

@@ -37,6 +37,14 @@ async def init_db():
             date_registered TEXT
         );
         """)
+        cursor = await db.execute("PRAGMA table_info(users);")
+        user_columns = {row[1] for row in await cursor.fetchall()}
+
+        if "gender" not in user_columns:
+            await db.execute(
+                "ALTER TABLE users ADD COLUMN gender TEXT CHECK (gender IN ('М', 'Ж'));"
+            )
+
         # миграция: добавляем колонку username, если её ещё нет
         cursor = await db.execute("PRAGMA table_info(users);")
         user_columns = {row[1] for row in await cursor.fetchall()}
@@ -73,7 +81,7 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS complaints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            adresat INTEGER NOT NULL,
+            adresat INTEGER,
             violetion TEXT,
             description TEXT,
             date_created TEXT NOT NULL DEFAULT (datetime('now')),
