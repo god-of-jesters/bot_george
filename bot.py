@@ -7,6 +7,8 @@ from datetime import datetime
 from random import choice
 from turtle import update
 import aiosqlite
+from bot_george.entityes.promokod import Promokod
+from bot_george.repo.promokod_repo import add_promokod
 from dotenv import load_dotenv
 from collections import defaultdict
 
@@ -23,6 +25,7 @@ from repo.team_repo import *
 from repo.user_repo import *
 from repo.file_repo import *
 from repo.complaint_repo import *
+from repo.product_repo import *
 from repo.message_repo import Message as ms, update_status, update_status_skip_new
 from repo.message_repo import add_message, delete_message, update_message, get_message, get_new_messages, get_message_access
 from entityes.sequence import *
@@ -49,6 +52,7 @@ maling = {}
 maling_special = {}
 rating = {}
 rating_choice = {}
+promos = {}
 messagess = {}
 violetion_vines = {
     "Нахождение на базе без личной карточки участника": 10,
@@ -473,17 +477,22 @@ async def show_main_rpg_organizer(callback_query: Message, state: FSMContext):
 
     match data:
         case "profile":
-            await callback_query.message.answer("Профиль РПГ-организатора.", reply_markup=get_profile_keyboard())
+            await callback_query.message.answer("Профиль РПГ.", reply_markup=get_profile_keyboard())
             await state.set_state(MainMenu.profile)
+        
+        case "create_promo":
+            await callback_query.message.answer("Введите фразу промокода")
+            await state.set_state(PromoCreate.waiting_for_phrase)
+        case "bonus":
+            await callback_query.message.answer("Выберите получателя бонуса", reply_markup=get_maling_adresat())
+            await state.set_state(Bonus.waiting_adresat)
+        case "edit_products":
 
-        case "entertainment":
-            await callback_query.message.answer("Магазин.\n(Здесь будет магазин для РПГ-организаторов.)")
-
-        case "operations_with_participants":
-            await callback_query.message.answer("Операции с участниками.\n(Здесь будут операции с участниками.)")
-
-        case "operation_history":
-            await callback_query.message.answer("История операций.\n(Здесь будет история операций.)")
+        case "get_sells":
+    
+        case "complaint":
+            await callback_query.message.answer("На что будет жалоба.", reply_markup=get_complaint_keyboard())
+            await state.set_state(MainMenu.complaint)
 
         case "mailing":
             await callback_query.message.answer("Введите текст рассылки.\n")
@@ -1454,6 +1463,66 @@ async def give_bonus_amount(message: Message, state: FSMContext):
 
     await show_main_menu(message.bot, user_id, state)
     
+"""PROMOKODS"""
+
+@router.message(PromoCreate.waiting_for_phrase)
+async def process_promo_phrase(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    phrase = message.text
+    user = await get_user(user_id)
+    if user:
+        promos[user_id] = Promokod(phrase=phrase, badge_number=user.badge_number)
+        await message.answer('Введите колличество промокодов')
+        await state.set_state(PromoCreate.waiting_for_amount)
+    else:
+        await show_main_menu(message.bot, user_id, state)
+
+@router.message(PromoCreate.waiting_for_amount)
+async def process_promo_amount(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    if not text.isdigit():
+        await message.answer('Кол-во должно быть числом')
+        await state.set_state(PromoCreate.waiting_for_amount)
+        return
+    
+    promos[user_id].amount = int(text)
+    await message.answer('Введите бонус')
+    await state.set_state(PromoCreate.waiting_for_bonus)
+
+@router.message(PromoCreate.waiting_for_bonus)
+async def process_promo_bonus(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    if not text.isdigit():
+        await message.answer('Бонус должен быть числом')
+        await state.set_state(PromoCreate.waiting_for_amount)
+        return
+    
+    promos[user_id].bonus = int(text)
+    i = await add_promokod(promos[user_id])
+    await message.answer(f'Промокод номер {i} {promos[user_id].bonus} добавлен')
+    del promos[user_id]
+    await show_main_menu(message.bot, user_id, state)
+
+"""BONUS"""
+@router.message(Bonus.waiting_adresat)
+async def process_bonus_adresat(callback_query: CallbackQuery, state: FSMContext):
+    user_id = message.from_user.id
+    data = message.data
+    maling[user_id] = data
+
+    match data:
+        case 'user':
+            await message.message.answer('Введите номер бейджа человека')
+        case 'team':
+            await message.message.answer('Введите номер команды')
+        case 'all':
+            await message.message.answer('Жду текст сообщения')
+            await state.set_state(Mailing.waiting_for_mailing_text)
+            return
+    await state.set_state(Mailing.waiting_info)
+
 """UPLOAD/EXPORT CSV FILES"""
 
 UPLOAD_RATING_PARTICIPANTS = "upload_rating_participants"

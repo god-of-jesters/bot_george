@@ -109,6 +109,29 @@ async def init_db():
         """)
 
         await db.execute("""
+        CREATE TABLE IF NOT EXISTS sells (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            badge_number INTEGER,
+            poduct_id INTEGER,
+            date_created TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (badge_number) REFERENCES users(badge_number),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS promokodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phrase TEXT,
+            amount INTEGER,
+            bonus INTEGER,
+            badge_number INTEGER,
+            date_created TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (badge_number) REFERENCES users(badge_number)
+        );
+        """)
+
+        await db.execute("""
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             event TEXT NOT NULL,

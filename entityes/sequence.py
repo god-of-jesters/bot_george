@@ -61,3 +61,13 @@ class Rating(StatesGroup):
     waiting_for_amount = State()
     waiting_for_amount_bonus = State()
     waiting_for_badge_number_bonus = State()
+
+class PromoCreate(StatesGroup):
+    waiting_for_phrase = State()
+    waiting_for_amount = State()
+    waiting_for_bonus = State()
+
+class Bonus(StatesGroup):
+    waiting_adresat = State()
+    waiting_number = State()
+    waiting_amount = State()
