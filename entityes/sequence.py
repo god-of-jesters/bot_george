@@ -88,8 +88,19 @@ class Shop(StatesGroup):
     wait_for_user_data = State()
     wait_for_product_number = State()
     wait_complite_buy = State()
+    rpg_choice = State()
 
 class ZAGS(StatesGroup):
     waiting_for_choice = State()
     waiting_for_badge = State()
     waiting_for_fio = State()
+    rpg_choice = State()
+
+class Gift(StatesGroup):
+    waiting_for_badge_number = State()
+    waiting_for_text = State()
+    bonus = State()
+
+class Married(StatesGroup):
+    waiting_for_second_name = State()
+    waiting_second_name = State()

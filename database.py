@@ -206,6 +206,19 @@ async def init_db():
             second INTEGER,
             first_name TEXT,
             second_name TEXT,
+            status TEXT,
+            FOREIGN KEY (first) REFERENCES users(badge_number) ON DELETE CASCADE,
+            FOREIGN KEY (second) REFERENCES users(badge_number) ON DELETE CASCADE
+        );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS sons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            parent INTEGER,
+            son INTEGER,
+            second_name TEXT,
+            status TEXT,
             FOREIGN KEY (first) REFERENCES users(badge_number) ON DELETE CASCADE,
             FOREIGN KEY (second) REFERENCES users(badge_number) ON DELETE CASCADE
         );
@@ -231,6 +244,24 @@ async def init_db():
             status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'approved', 'rejected')),
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS uses_promo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            badge_number INTEGER,
+            promo_id INTEGER,
+            FOREIGN KEY (badge_number) REFERENCES users(badge_number),
+            FOREIGN KEY (promo_id) REFERENCES promokodes(id)
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS thanks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            badge_number_user INTEGER,
+            badge_number_from INTEGER,
+            text INTEGER,
+            status TEXT
         """)
 
         await db.commit()

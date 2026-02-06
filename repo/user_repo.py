@@ -429,3 +429,207 @@ async def get_user_balance(badge_number: int) -> int | None:
         return None
 
     return row[0]
+
+async def create_family_request(badge_number: int, badge_number_from: int, fio_choice: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            DELETE FROM families WHERE first = ?
+            """,
+            (badge_number,),
+        )
+        await db.execute(
+            """
+            INSERT INTO families (first, second, first_name)
+            VALUES (?, ?, ?)
+            """,
+            (badge_number, badge_number_from, fio_choice),
+        )
+        await db.commit()
+
+async def set_family_status(badge_number: int, status: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            UPDATE families SET status = ? WHERE first = ? OR second = ?
+            """,
+            (status, badge_number, badge_number),
+        )
+
+async def set_family_second(badge_number: int, name: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            UPDATE families SET second_name = ? WHERE first = ? OR second = ?
+            """,
+            (name, badge_number, badge_number),
+        )
+
+async def get_family_request_by_badge(badge_number: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT id, badge_number, badge_number_from
+            FROM families
+            WHERE badge_number = ?
+            LIMIT 1
+            """,
+            (badge_number,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return row
+
+
+async def delete_family_by_badge(badge_number: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM families WHERE first = ? OR second = ?", (badge_number, badge_number))
+        await db.commit()
+    
+async def get_user_tg_by_badge(badge_number: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT tg_id, fio FROM users WHERE badge_number = ? LIMIT 1",
+            (badge_number,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        if not row:
+            return None, None
+        return row[0], row[1]
+
+async def get_all_families_strings(max_pairs_per_string: int = 20) -> list[str]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT id, first, second, first_name, second_name, status
+            FROM families
+            ORDER BY id
+            """
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+
+    if not rows:
+        return ["Семей пока нет."]
+
+    result: list[str] = []
+    current_pairs: list[str] = []
+
+    for family_id, first, second, first_name, second_name, status in rows:
+        pair = f"({family_id}, {first}, {second}, {first_name}, {second_name}, {status})"
+        current_pairs.append(pair)
+
+        if len(current_pairs) >= max_pairs_per_string:
+            result.append(" | ".join(current_pairs))
+            current_pairs = []
+
+    if current_pairs:
+        result.append(" | ".join(current_pairs))
+
+    return result
+
+    
+async def add_son(parent: int, son: int, fio: str) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            INSERT INTO sons VALUES(parent, son, second_name, status)
+            VALUES (?, ?, ?, "new")
+            """, (parent, son, fio)
+        )
+        db.commit()
+        return cursor.lastrowid
+
+async def get_sons(i: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT parent FROM sons WHERE son = ?
+            """, (i, )
+        )
+        row = await cursor.fetchone()
+        return row[0]
+
+async def del_sons(i: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM sons WHERE id = ?", (i,))
+        await db.commit()
+
+async def is_family(db, badge_number: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT 1
+            FROM families
+            WHERE first = ? OR second = ?
+            LIMIT 1
+            """,
+            (badge_number, badge_number),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return row is not None
+
+async def is_sone(badge_number: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT 1
+            FROM sons
+            WHERE son = ?
+            LIMIT 1
+            """,
+            (badge_number,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return row is not None
+
+async def set_sons_status(i: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            UPDATE sons SET status = "created" WHERE id = ?
+            """,
+            (i, ),
+        )
+
+async def get_sons_strings(db, max_pairs_per_string: int = 20) -> list[str]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT 
+                s.id,
+                p.fio,
+                p.gender,
+                c.fio,
+                s.second_name
+            FROM sons s
+            JOIN users p ON p.badge_number = s.parent
+            JOIN users c ON c.badge_number = s.son
+            ORDER BY s.id
+            """
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+
+        if not rows:
+            return ["Усыновлений и удочерений пока нет."]
+
+        result: list[str] = []
+        current_pairs: list[str] = []
+
+        for son_id, parent_fio, parent_gender, son_fio, second_name in rows:
+            child_word = "сын" if parent_gender == "М" else "дочь"
+            pair = f"{son_id} {parent_fio} {child_word} {son_fio} {second_name}"
+            current_pairs.append(pair)
+
+            if len(current_pairs) >= max_pairs_per_string:
+                result.append(" | ".join(current_pairs))
+                current_pairs = []
+
+        if current_pairs:
+            result.append(" | ".join(current_pairs))
+
+        return result

@@ -14,7 +14,7 @@ from aiogram.types import BufferedInputFile
 
 import aiosqlite
 from entityes.promokod import Promokod
-from repo.promokod_repo import add_promokod, get_promo_by_pharse, update_promokod
+from repo.promokod_repo import add_promokod, add_thanks, get_promo_by_pharse, is_promo_used_by_user, mark_promo_as_used, update_promokod
 from dotenv import load_dotenv
 from collections import defaultdict
 
@@ -32,6 +32,7 @@ from repo.user_repo import *
 from repo.file_repo import *
 from repo.complaint_repo import *
 from repo.product_repo import *
+from repo.promokod_repo import *
 from repo.message_repo import Message as ms, update_status, update_status_skip_new
 from repo.message_repo import add_message, delete_message, update_message, get_message, get_new_messages, get_message_access
 from entityes.sequence import *
@@ -58,6 +59,8 @@ maling = {}
 maling_special = {}
 rating = {}
 rating_choice = {}
+gift_req = {}
+sons = {}
 promos = {}
 messagess = {}
 violetion_vines = {
@@ -341,6 +344,24 @@ async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMConte
     al[user_id] = com
     await state.set_state(ComplaintReview.stat)
 
+@router.callback_query(lambda c: c.data in ("sons:yes", "sons:no"))
+async def process_son_agree(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    son = await get_sons(sons[user_id])
+    match data:
+        case 'soons:yes':
+            pol = 'сыном' if active_sessions[user_id] == 'М' else 'дочерью'
+            await callback_query.message.answer(f'Поздравляем, вы стали {pol}!')
+            await show_main_menu(callback_query.bot, user_id, state)
+        case 'sons:no':
+            await callback_query.message.answer(f'Предложение отклонено!')
+            await show_main_menu(callback_query.bot, user_id, state)
+            await del_sons(sons[user_id])
+        case _:
+            await show_main_menu(callback_query.bot, user_id, state)
+    del sons[user_id]
+
 @router.message(MainMenu.profile)
 async def main_menu_callback(message: Message, state: FSMContext):
     user_id = message.from_user.id
@@ -384,16 +405,15 @@ async def cmd_exit(message: Message):
 async def show_profile(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
+    user = await get_user(user_id)
     match data:
         case "profile":
             profile = "Профиль:\n"
-            profile += f"ФИО: {active_sessions[user_id].fio}\n Роль: {active_sessions[user_id].role}\n"
-            profile += f"Номер бейджа: {active_sessions[user_id].badge_number}\n"
+            profile += f"ФИО: {user.fio}\n Роль: Разработчик\n"
+            profile += f"Номер бейджа: {user.badge_number}\n"
             if active_sessions[user_id].role == "Участник":
                 profile += f"Название команды: {TEAMS[active_sessions[user_id].team_number].team_name}\n" if active_sessions[user_id].team_number in TEAMS else "Не назначена команда\n"
-                profile += f"Рейтинг: {active_sessions[user_id].reiting}\n"
-                profile += f"Рейтинг команды: {TEAMS[active_sessions[user_id].team_number].reiting}\n" if active_sessions[user_id].team_number in TEAMS else ""
-                profile += f"Баланс: {active_sessions[user_id].balance} очков\n"
+                profile += f"Баланс: {user.balance} очков\n"
                 await callback_query.message.answer(profile, reply_markup=get_profile_keyboard())
                 await state.set_state(MainMenu.profile)
         case "complaint":
@@ -435,9 +455,9 @@ async def show_main_organizer(callback_query: CallbackQuery, state: FSMContext):
         return
 
     match data:
-        case "profile":
-            await callback_query.message.answer("Профиль организатора.", reply_markup=get_profile_keyboard())
-            await state.set_state(MainMenu.profile)
+        case "gift":
+            await callback_query.message.answer('Введите номер участника, которого хотите пообщрить')
+            await state.set_state(Gift.waiting_for_badge_number)
 
         case "complaint":
             await callback_query.message.answer("Подать жалобу.", reply_markup=get_complaint_keyboard())
@@ -458,14 +478,9 @@ async def show_main_organizer(callback_query: CallbackQuery, state: FSMContext):
                 await callback_query.message.answer("Жалобы в работе не найдены.")
                 await show_main_menu(callback_query.bot, user_id, state)
             
-
         case "contact":
             await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
             await state.set_state(MainMenu.message_to_rating_team)
-
-        case "mailing":
-            await callback_query.message.answer("Введите текст рассылки.\n")
-            await state.set_state(Mailing.waiting_for_mailing_text)
 
         case "help":
             await callback_query.message.answer("Помощь.\n(Здесь будет справка для организаторов.)")
@@ -482,27 +497,17 @@ async def show_main_rpg_organizer(callback_query: CallbackQuery, state: FSMConte
         return
 
     match data:
-        case "profile":
-            await callback_query.message.answer("Профиль РПГ.", reply_markup=get_profile_keyboard())
-            await state.set_state(MainMenu.profile)
+        case 'shop':
+            await callback_query.message.answer('Главное меню магазина', reply_markup=get_shop_rpg_organizer())
+            await state.set_state(Shop.rpg_choice)
+
+        case 'zags':
+            await callback_query.message.answer('Главное отделение ЗАГСа', reply_markup=get_zags_rpg_organizer())
+            await state.set_state(ZAGS.rpg_choice)
         
-        case "create_promo":
-            await callback_query.message.answer("Введите фразу промокода")
-            await state.set_state(PromoCreate.waiting_for_phrase)
-
-        case "bonus":
-            await callback_query.message.answer("Выберите получателя бонуса", reply_markup=get_maling_adresat())
-            await state.set_state(Bonus.waiting_adresat)
-
-        case "edit_products":
-            await callback_query.message.answer('Выберете дейстивие', reply_markup=get_edit_product_choice())
-            await state.set_state(Products.wait_choice_action)
-
-        case "get_sells":
-            await export_sells_xlsx(callback_query.bot, user_id)
-        
-        case "get_products":
-            await export_remaining_products_xlsx(callback_query.bot, user_id)
+        case "gift":
+            await callback_query.message.answer('Введите номер участника, которого хотите пообщрить')
+            await state.set_state(Gift.waiting_for_badge_number)
 
         case "complaint":
             await callback_query.message.answer("На что будет жалоба.", reply_markup=get_complaint_keyboard())
@@ -531,9 +536,9 @@ async def show_main_admins(callback_query: Message, state: FSMContext):
         return
 
     match data:
-        case "profile":
-            await callback_query.message.answer("Профиль администратора по комнатам.", reply_markup=get_profile_keyboard())
-            await state.set_state(MainMenu.profile)
+        case "gift":
+            await callback_query.message.answer('Введите номер участника, которого хотите пообщрить')
+            await state.set_state(Gift.waiting_for_badge_number)
 
         case "manage_rooms":
             await show_next_room_problem(callback_query.bot, user_id, state)
@@ -565,9 +570,8 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
         return
 
     match data:
-        case "profile":
-            await callback_query.message.answer("Профиль команды рейтинга.", reply_markup=get_profile_keyboard())
-            await state.set_state(MainMenu.profile)
+        case "gifts":
+            await show_next_gift(callback_query.bot, user_id, state)
 
         case "view_complaints":
             complaint = await get_oldest_complaint()
@@ -633,9 +637,9 @@ async def show_main_chief_organizer(callback_query: Message, state: FSMContext):
         return
 
     match data:
-        case "profile":
-            await callback_query.message.answer("Профиль медиа.", reply_markup=get_profile_keyboard())
-            await state.set_state(MainMenu.profile)
+        case "gift":
+            await callback_query.message.answer('Введите номер участника, которого хотите пообщрить')
+            await state.set_state(Gift.waiting_for_badge_number)
 
         case "mailing":
             await callback_query.message.answer("Выберете получателей рассылки.\n", reply_markup=get_maling_adresat())
@@ -1580,8 +1584,12 @@ async def process_promo_phrase_user(message: Message, state: FSMContext):
     user = await get_user(user_id)
     promokod = await get_promo_by_pharse(phrase)
     if promokod:
-        await message.answer(f'Промокод применен, на баланс начисленноо {promokod.bonus} единиц')
-        await update_promokod(promokod.id, promokod.bonus, promokod.amount - 1)
+        if not is_promo_used_by_user(user.badge_number, promokod.id):
+            await message.answer(f'Промокод применен, на баланс начисленноо {promokod.bonus} единиц')
+            await update_promokod(promokod.id, promokod.bonus, promokod.amount - 1)
+            await mark_promo_as_used(user.badge_number, promokod.id)
+        else:
+            await message.answer(f'Вы уже пременяли этот промокод ранее')
     else:
         await message.answer('Такого промокода не существует либо он закончился')
     await callback_query.message.answer("Магазин.", reply_markup=get_student_shop_keyboard())
@@ -1678,6 +1686,7 @@ async def process_bonus_amount(message: Message, state: FSMContext):
     await state.clear()
 
 """PRODUCTS"""
+
 @router.callback_query(Products.wait_choice_action)
 async def process_product_choice(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
@@ -1817,6 +1826,7 @@ async def process_product_edit_value(message: Message, state: FSMContext):
     await show_main_menu(message.bot, message.from_user.id, state)
 
 """SHOP"""
+
 @router.callback_query(Shop.wait_for_choice_action)
 async def process_shop_choice(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
@@ -1971,22 +1981,69 @@ async def process_complite_buy(callback_query: CallbackQuery, state: FSMContext)
         
     await show_main_menu(callback_query.bot, user_id, state)    
 
+@router.callback_query(Shop.rpg_choice)
+async def process_rpg_shop(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    match data:
+        case "create_promo":
+            await callback_query.message.answer("Введите фразу промокода")
+            await state.set_state(PromoCreate.waiting_for_phrase)
+
+        case "bonus":
+            await callback_query.message.answer("Выберите получателя бонуса", reply_markup=get_maling_adresat())
+            await state.set_state(Bonus.waiting_adresat)
+
+        case "edit_products":
+            products = await get_products_shop()
+            if not products:
+                await callback_query.message.answer('Пока магазин пуст, возвращайтесь позже')
+                await show_main_menu(callback_query.bot, user_id, state)
+            if products:
+                for i in products:
+                    await callback_query.bot.send_message(user_id, i)
+            await callback_query.message.answer('Выберете дейстивие', reply_markup=get_edit_product_choice())
+            await state.set_state(Products.wait_choice_action)
+
+        case "get_sells":
+            await export_sells_xlsx(callback_query.bot, user_id)
+        
+        case "get_products":
+            products = await get_products_shop()
+            if not products:
+                await callback_query.message.answer('Пока магазин пуст, возвращайтесь позже')
+                await show_main_menu(callback_query.bot, user_id, state)
+            if products:
+                for i in products:
+                    await callback_query.bot.send_message(user_id, i)
+            await callback_query.message.answer('Выберете дейстивие', reply_markup=get_edit_product_choice())
+            await state.set_state(Products.wait_choice_action)
+        
+        case _:
+            await show_main_menu(callback_query.bot, user_id, state)    
+
 """ZAGS"""
+
 @router.callback_query(ZAGS.waiting_for_choice)
 async def process_zags_choice(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
+    await state.update_data(choice=data)
     match data:
         case 'married':
             await callback_query.message.answer('Введите номер бейджа кому предложение')
             await state.set_state(ZAGS.waiting_for_badge)
+        case 'son':
+            await callback_query.message.answer('Введите номер бейджа человека, которого хотите усыновить')
+            await state.set_state(ZAGS.waiting_for_badge)
         case _:
             await show_main_menu(callback_query.bot, user_id, state)
 
-@router.callback_query(ZAGS.waiting_for_badge)
+@router.message(ZAGS.waiting_for_badge)
 async def process_zags_badge(message: Message, state: FSMContext):
     user_id = callback_query.from_user.id
     text = message.text
+    data = await state.get_data()
     if not text.isdigit():
         await message.answer('Номер должен быть числом введите еще раз')
         return 
@@ -1995,12 +2052,18 @@ async def process_zags_badge(message: Message, state: FSMContext):
     if not adr:
         await message.answer('Такого человека не существует')
         return 
-    if adr.gender == user.gender:
-        await message.answer('Браки могут составляться только между мужчиной и женщиной')
-        return 
-    await message.answer('Чью фамилию выбираете', reply_markup=get_married_second_name())
-    await state.update_data(int(text))
-    await state.set_state(ZAGS.waiting_for_fio)
+    match data.get('choice'):
+        case 'married':
+            if adr.gender == user.gender:
+                await message.answer('Браки могут составляться только между мужчиной и женщиной')
+                return 
+            await message.answer('Чью фамилию выбираете', reply_markup=get_married_second_name())
+            await state.update_data(badge=int(text))
+            await state.set_state(ZAGS.waiting_for_fio)
+        case 'son':
+            await message.answer('Чью фамилию выбираете', reply_markup=get_married_second_name())
+            await state.update_data(badge=int(text))
+            await state.set_state(ZAGS.waiting_for_fio)
 
 @router.callback_query(ZAGS.waiting_for_fio)
 async def process_(callback_query: CallbackQuery, state: FSMContext):
@@ -2009,7 +2072,174 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
     dat = await state.get_data()
     badge_number = dat.get('badge_number')
     adr = await get_user_by_badge(badge_number)
-    
+    if not adr.tg_id:
+        await callback_query.message.answer('Пользователь еще не зарегестрировался в боте, попробуйте снова позже')
+    else:
+        match dat.get('choice'):
+            case 'married':
+                await create_family_request(adr.badge_number, user.badge_number, data)
+                await callback_query.bot.send_message(
+                    adr.tg_id,
+                    f"{user.fio} предлагает завести семью. Согласен(на)?",
+                    reply_markup=get_family_yes_no_keyboard(),
+                )
+                await callback_query.message.answer("Отправил(а) запрос адресату.")
+                await show_main_menu(callback_query.bot, user_id, state)
+            
+            case 'son':
+                sons[adr.tg_id] = await add_son(active_sessions[user_id].badge_number, badge_number, fio = data)
+                if adr.gender == 'М':
+                    await callback_query.bot.send_message(adr.tg_id, f'Вас хочет усыновить {active_sessions[user_id].fio}')
+                else:
+                    await callback_query.bot.send_message(adr.tg_id, f'Вас хочет удочерить {active_sessions[user_id].fio}')
+                await callback_query.message.answer('Предложение отправлено')
+                await show_main_menu(callback_query.bot, user_id, state)
+
+@router.callback_query(F.data.in_({"family_yes", "family_no"}))
+async def family_answer(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    me = await get_user(user_id)
+    if not me:
+        return
+
+    req = await get_family_request_by_badge(me.badge_number)
+    if not req or req[2] != "pending":
+        await callback_query.message.answer("Активного запроса на семью нет.")
+        return
+
+    badge_number, badge_from, status, fio_choice = req
+    sender = await get_user_by_badge(badge_from)
+
+    match callback_query.data:
+        case "family_yes":
+            await callback_query.message.answer("Ок. Выбери фамилию.", reply_markup=get_married_second_name())
+            await state.update_data(family_from_badge=badge_from, family_fio_choice=fio_choice)
+            await state.set_state(Married.waiting_for_second_name)
+        case "family_no":
+            await delete_family_by_badge(me.badge_number)
+
+            if sender and sender.tg_id:
+                await callback_query.bot.send_message(
+                    sender.tg_id,
+                    f"{me.fio} отказал(а) в создании семьи. Брак не будет заключен."
+                )
+            await callback_query.message.answer("Ок. Я уведомил(а) отправителя и удалил(а) заявку.")
+
+@router.callback_query(Married.waiting_for_second_name)
+async def family_second_name(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    me = await get_user(user_id)
+    await set_family_second(me.badge_number, callback_query.data)
+    await set_family_status(me.badge_number, 'created')
+
+@router.callback_query(ZAGS.rpg_choice)
+async def zags_rpg(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    match data:
+        case 'show_families':
+            fams = await get_all_families_strings()
+            for i in fams:
+                await callback_query.bot.send_message(user_id, i)
+            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
+        case 'show_sons':
+            sons = await get_sons_strings()
+            for i in sons:
+                await callback_query.bot.send_message(user_id, i)
+            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
+
+"""GIFTS"""
+
+@router.callback_query(Gift.waiting_for_badge)
+async def process_gift_badge(message: Message, state: FSMContext):
+    user_id = callback_query.from_user.id
+    text = message.text
+    if not text.isdigit():
+        await message.answer('Номер должен быть числом введите еще раз')
+        return 
+    adr = await get_user_by_badge(int(text))
+    if not adr:
+        await message.answer('Такого пользователя не существует введите еще раз')
+        return 
+    await message.answer('Введите текст поощрения')
+    await state.set_state(Gift.waiting_for_text)
+
+@router.callback_query(Gift.waiting_for_text)
+async def process_gift_text(message: Message, state: FSMContext):
+    user_id = callback_query.from_user.id
+    text = message.text
+    data = await state.get_data()
+    user = await get_user(user_id)
+    await add_thanks(user.badge_number, data.get('badge_number'), text)
+    await message.answer('Заявка на поощрение отослана')
+    await show_main_menu(message.bot, user_id, state)
+
+@router.callback_query(F.data == "gift_decline")
+async def gift_decline(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Рейтинг":
+        return
+
+    req = gift_req.get(user_id)
+    if not req:
+        await callback_query.message.answer("Заявка не найдена. Открой «Подарки» заново.")
+        await callback_query.answer()
+        return
+
+    thanks_id = int(req[0])
+    await set_gift_status(thanks_id, "declined")
+    await callback_query.answer("Отказано")
+    await show_next_gift(callback_query.bot, user_id, state)
+
+@router.callback_query(F.data == "gift_accept")
+async def gift_accept(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Рейтинг":
+        return
+
+    req = gift_req.get(user_id)
+    if not req:
+        await callback_query.message.answer("Заявка не найдена. Открой «Подарки» заново.")
+        await callback_query.answer()
+        return
+
+    thanks_id, badge_user, badge_from, text, status = req
+    await state.update_data(gift_thanks_id=int(thanks_id), gift_badge_user=int(badge_user))
+    await callback_query.message.answer(f"Введите кол-во бонусов для заявки #{thanks_id}")
+    await state.set_state(Gift.bonus)
+    await callback_query.answer()
+
+@router.message(Gift.bonus)
+async def gift_bonus_input(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    role = getattr(active_sessions.get(user_id), "role", None)
+    if role != "Рейтинг":
+        return
+
+    txt = (message.text or "").strip()
+    if not txt.isdigit() or int(txt) <= 0:
+        await message.answer("Нужно число больше 0. Пришли ещё раз.")
+        return
+
+    amount = int(txt)
+    data = await state.get_data()
+    thanks_id = int(data.get("gift_thanks_id", 0))
+    badge_user = int(data.get("gift_badge_user", 0))
+
+    if not thanks_id or not badge_user:
+        await message.answer("Не нашёл заявку. Открой «Подарки» заново.")
+        await state.set_state(MainMenu.main_menu_rating_team)
+        await show_main_menu(message.bot, user_id, state)
+        return
+
+    await add_bonus(badge_user, amount)
+    await set_gift_status(thanks_id, "done")
+
+    await message.answer(f"Начислено {amount} бонусов. Заявка #{thanks_id} закрыта.")
+    await state.set_state(MainMenu.main_menu_rating_team)
+    await show_next_gift(message.bot, user_id, state)
 
 """UPLOAD/EXPORT CSV FILES"""
 UPLOAD_RATING_PARTICIPANTS = "upload_rating_participants"
@@ -2675,6 +2905,26 @@ async def show_main_menu(bot: Bot, user_id: int, state: FSMContext | None = None
             )
             if state:
                 await state.set_state(MainMenu.main_menu_media)
+
+async def show_next_gift(bot, user_id: int, state: FSMContext):
+    req = await get_oldest_request()
+    if not req:
+        await bot.send_message(user_id, "Заявок на подарки больше нет.")
+        await state.set_state(MainMenu.main_menu_rating_team)
+        await show_main_menu(bot, user_id, state)
+        return
+
+    gift_req[user_id] = req
+    thanks_id, badge_user, badge_from, text, status = req
+
+    await bot.send_message(
+        user_id,
+        f"Заявка #{thanks_id}\n"
+        f"Кому (бейдж): {badge_user}\n"
+        f"От (бейдж): {badge_from}\n"
+        f"Текст: {text}",
+        reply_markup=get_gift_keyboard(),
+    )
 
 async def send_complaint_files(bot: Bot, chat_id: int, complaint_id: int):
     rows = await get_files_by_complaint_id(complaint_id)
