@@ -13,7 +13,9 @@ from openpyxl.utils import get_column_letter
 from aiogram.types import BufferedInputFile
 
 import aiosqlite
+from entityes import task
 from entityes.promokod import Promokod
+from entityes.task import Taski
 from repo.promokod_repo import add_promokod, add_thanks, get_promo_by_pharse, is_promo_used_by_user, mark_promo_as_used, update_promokod
 from dotenv import load_dotenv
 from collections import defaultdict
@@ -27,6 +29,7 @@ from aiogram.types import FSInputFile
 
 from database import load_datastore, USERS, TEAMS, FILES, COMPLAINTS, PRODUCT_NAME_INDEX, PRODUCTS
 from entityes import product, user
+from repo.task_repo import *
 from repo.team_repo import *
 from repo.user_repo import *
 from repo.file_repo import *
@@ -34,7 +37,7 @@ from repo.complaint_repo import *
 from repo.product_repo import *
 from repo.promokod_repo import *
 from repo.message_repo import Message as ms, update_status, update_status_skip_new
-from repo.message_repo import add_message, delete_message, update_message, get_message, get_new_messages, get_message_access
+from repo.message_repo import add_message, delete_message, update_message, get_message, get_new_messages, get_message_access, get_oldest_new_message, set_message_status, add_isk
 from entityes.sequence import *
 from entityes.logger import *
 
@@ -63,6 +66,8 @@ gift_req = {}
 sons = {}
 promos = {}
 messagess = {}
+process_tasks = {}
+inbox_msgs = {}
 violetion_vines = {
     "Нахождение на базе без личной карточки участника": 10,
     "Нахождение в неподходящей под погодные условия одежде на улице": 7,
@@ -347,17 +352,24 @@ async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMConte
 @router.callback_query(lambda c: c.data in ("sons:yes", "sons:no"))
 async def process_son_agree(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
+    user = await get_user_by_badge(active_sessions[user_id].badge_number)
     data = callback_query.data
-    son = await get_sons(sons[user_id])
+    son = await get_sons(user.badge_number)
+    parent = await get_user_by_badge(son)
+    ph = 'усыновление' if active_sessions[user_id] == 'М' else 'удочерение'
+    ac = 'принял' if active_sessions[user_id] == 'М' else 'приняла'
+    a = 'отклонил' if active_sessions[user_id] == 'М' else 'отклонила'
     match data:
         case 'soons:yes':
             pol = 'сыном' if active_sessions[user_id] == 'М' else 'дочерью'
-            await callback_query.message.answer(f'Поздравляем, вы стали {pol}!')
+            await callback_query.message.answer(f'Пройдите на стойку регистрации!')
             await show_main_menu(callback_query.bot, user_id, state)
+            await callback_query.bot.send_message(parent.tg_id, f'{user.fio} @{user.username} {ac} запрос на {ph} приняли. Пройдите на стойку регистрации')
         case 'sons:no':
             await callback_query.message.answer(f'Предложение отклонено!')
             await show_main_menu(callback_query.bot, user_id, state)
             await del_sons(sons[user_id])
+            await callback_query.bot.send_message(parent.tg_id, f'{user.fio} @{user.username} {a} запрос на {ph}.')
         case _:
             await show_main_menu(callback_query.bot, user_id, state)
     del sons[user_id]
@@ -399,6 +411,100 @@ async def cmd_exit(message: Message):
     active_sessions.pop(message.from_user.id)
     await del_from_active(message.from_user.id)
 
+@router.callback_query(F.data.in_({"family_yes", "family_no"}))
+async def family_answer(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    me = await get_user(user_id)
+    if not me:
+        return
+
+    req = await get_family_request_by_badge(me.badge_number)
+    if not req:
+        await callback_query.message.answer("Активного запроса на семью нет.")
+        return
+
+    id, badge_number, badge_from = req
+    sender = await get_user_by_badge(badge_from)
+
+    match callback_query.data:
+        case "family_yes":
+            me = await get_user_by_badge(active_sessions[user_id].badge_number)
+            if not me:
+                await delete_family_by_badge(active_sessions[user_id].badge_number)
+                await callback_query.message.answer('Проблемы, обратитесь к отделу справедливости')
+                await show_main_menu(callback_query.bot, user_id, state)
+                return
+            await set_family_second(me.badge_number, callback_query.data)
+            await set_family_status(me.badge_number, 'created')
+            await callback_query.message.answer('Поздравляю! Подойдите на стойку регистрации для дальнейшего заключения брака')
+            await show_main_menu(callback_query.bot, user_id, state)
+            if sender == 'Ж':
+                await callback_query.bot.send_message(sender.tg_id, f'{me.fio} {me.username} согласна! Подойдите на стойку регистрации для дальнейшего заключения брака')
+            else:
+                await callback_query.bot.send_message(sender.tg_id, f'{me.fio} {me.username} согласен! Подойдите на стойку регистрации для дальнейшего заключения брака')
+        case "family_no":
+            await delete_family_by_badge(me.badge_number)
+
+            if sender and sender.tg_id:
+                await callback_query.bot.send_message(
+                    sender.tg_id,
+                    f"{me.fio} отказал(а) в создании семьи. Брак не будет заключен."
+                )
+            await callback_query.message.answer("Ок. Я уведомил(а) отправителя и удалил(а) заявку.")
+
+async def show_next_inbox_message(bot, user_id: int, state: FSMContext):
+    msg = await get_oldest_new_message()
+    if not msg:
+        await bot.send_message(user_id, "Входящих сообщений нет.")
+        await show_main_menu(bot, user_id, state)
+        return
+
+    inbox_msgs[user_id] = msg
+    mid, from_tg, adresat, badge_number, text, status, date_created = msg
+
+    sender = await get_user_by_badge(active_sessions[from_tg].badge_number)
+    sender_str = f"{sender.fio} @{sender.username}" if sender else str(from_tg)
+
+    await bot.send_message(
+        user_id,
+        f"Сообщение #{mid}\n"
+        f"От: {sender_str}\n"
+        f"Бейдж: {badge_number}\n"
+        f"Дата: {date_created}\n\n"
+        f"{text or ''}",
+        reply_markup=get_inbox_keyboard(),
+    )
+
+@router.callback_query(F.data == "inbox_messages")
+async def inbox_messages_start(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    await show_next_inbox_message(callback_query.bot, user_id, state)
+    await state.set_state(MainMenu.main_menu_rating_team)
+
+@router.callback_query(F.data == "inbox_done")
+async def inbox_done(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    msg = inbox_msgs.get(user_id)
+    if not msg:
+        await callback_query.message.answer("Сообщение не найдено. Открой входящие заново.")
+        await callback_query.answer()
+        return
+
+    mid = int(msg[0])
+    await set_message_status(mid, "complited")
+    await callback_query.answer("Отмечено")
+    await show_next_inbox_message(callback_query.bot, user_id, state)
+
+@router.callback_query(F.data == "inbox_skip")
+async def inbox_skip(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    await callback_query.answer("Отложено")
+    await show_next_inbox_message(callback_query.bot, user_id, state)
+
+async def send_pdf(message: Message, file_path: str, filename: str | None = None, caption: str | None = None):
+    doc = FSInputFile(file_path, filename=filename or (file_path.split("/")[-1]))
+    await message.answer_document(doc, caption=caption)
+
 """MAIN MENUS"""
 
 @router.callback_query(MainMenu.main_menu_student)
@@ -411,14 +517,17 @@ async def show_profile(callback_query: CallbackQuery, state: FSMContext):
             profile = "Профиль:\n"
             profile += f"ФИО: {user.fio}\n Роль: Разработчик\n"
             profile += f"Номер бейджа: {user.badge_number}\n"
-            if active_sessions[user_id].role == "Участник":
-                profile += f"Название команды: {TEAMS[active_sessions[user_id].team_number].team_name}\n" if active_sessions[user_id].team_number in TEAMS else "Не назначена команда\n"
-                profile += f"Баланс: {user.balance} очков\n"
-                await callback_query.message.answer(profile, reply_markup=get_profile_keyboard())
-                await state.set_state(MainMenu.profile)
+            team = await get_team(user.badge_number//100)
+            profile += f"Эксперементальная группа: {team.team_name}\n"
+            profile += f"Рейтинг: {user.reiting}\n"
+            profile += f"Баланс: {user.balance} токенов\n"
+            await callback_query.message.answer(profile, reply_markup=get_profile_keyboard())
+            await state.set_state(MainMenu.profile)
+        
         case "complaint":
             await callback_query.message.answer("На что будет жалоба.", reply_markup=get_complaint_keyboard())
             await state.set_state(MainMenu.complaint)
+        
         case "my_complaints":
             s = ''
             complaints = await get_user_complaints(user_id)
@@ -429,20 +538,25 @@ async def show_profile(callback_query: CallbackQuery, state: FSMContext):
                 s += 'На: ' + adr_name + '\n'
                 s += 'Описание: ' + com.description + '\n\n'
             await callback_query.message.answer(s or "У вас пока нет жалоб.", reply_markup=get_profile_keyboard())
+
         case "entertainment":
             await state.set_state(MainMenu.student_entertainment)
             await callback_query.message.answer("Развлечения.", reply_markup=get_student_entertainment_keyboard())
+        
         case "help":
-            await callback_query.message.answer("Помощь.", reply_markup=get_student_help_keyboard())
-            await state.set_state(MainMenu.student_help)
+            await send_pdf(
+                callback_query.message,
+                "files/Правила комплекса.pdf",
+                caption="Правила комплекса"
+            )
+
+        case 'isk':
+            await callback_query.message.answer('От кого будет иск?')
+            await state.set_state(Isk.waiting_for_from)
+
         case "message_to_admin":
-            access = await get_message_access(user_id)
-            if access:
-                await callback_query.message.answer("Напишите ваше сообщение администрации.")
-                await state.set_state(MainMenu.message_to_admin)
-            else:
-                await callback_query.message.answer("Сообщения можно отправлять только раз в полчаса.")
-                await state.set_state(MainMenu.main_menu_student)
+            await callback_query.message.answer("Напишите ваше сообщение администрации.")
+            await state.set_state(MainMenu.message_to_rating_team)
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
@@ -482,8 +596,13 @@ async def show_main_organizer(callback_query: CallbackQuery, state: FSMContext):
             await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
             await state.set_state(MainMenu.message_to_rating_team)
 
-        case "help":
-            await callback_query.message.answer("Помощь.\n(Здесь будет справка для организаторов.)")
+        case "zags":
+            await callback_query.message.answer("ЗАГС.", reply_markup=get_student_zags_keyboard())
+            await state.set_state(ZAGS.waiting_for_choice)
+        
+        case 'isk':
+            await callback_query.message.answer('От кого будет иск?')
+            await state.set_state(Isk.waiting_for_from)
 
         case _:
             await callback_query.message.answer("Команда не распознана.")
@@ -521,8 +640,9 @@ async def show_main_rpg_organizer(callback_query: CallbackQuery, state: FSMConte
             await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
             await state.set_state(MainMenu.message_to_rating_team)
 
-        case "help":
-            await callback_query.message.answer("Помощь.\n(Здесь будет справка для РПГ-организаторов.)")
+        case 'isk':
+            await callback_query.message.answer('От кого будет иск?')
+            await state.set_state(Isk.waiting_for_from)
 
         case _:
             await callback_query.message.answer("Команда не распознана.")
@@ -555,8 +675,13 @@ async def show_main_admins(callback_query: Message, state: FSMContext):
             await callback_query.message.answer("Напишите сообщение для команды рейтинга.")
             await state.set_state(MainMenu.message_to_rating_team)
 
-        case "help":
-            await callback_query.message.answer("Помощь.\n(Здесь будет справка для администраторов по комнатам.)")
+        case "zags":
+            await callback_query.message.answer("ЗАГС.", reply_markup=get_student_zags_keyboard())
+            await state.set_state(ZAGS.waiting_for_choice)
+
+        case 'isk':
+            await callback_query.message.answer('От кого будет иск?')
+            await state.set_state(Isk.waiting_for_from)
 
         case _:
             await callback_query.message.answer("Команда не распознана.")
@@ -598,21 +723,17 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
         case "assign_rating":
             await callback_query.message.answer("Начисление и штрафы. Введите бейдж участника\n")
             await state.set_state(Rating.waiting_for_badge_number)
-        
-        case 'bonus':
-            await callback_query.message.answer("Введите номер бейджа\n")
-            await state.set_state(Rating.waiting_for_badge_number_bonus)
 
         case "inbox_messages":
-            await update_status_skip_new()
-            messages = await get_new_messages()
-            await callback_query.message.answer(f"Входящие сообщения: {len(messages)}\n")
-            if messages:
-                m = messages[0]
-                messagess[user_id] = m
-                us = await get_user(m.user_id)
-                await callback_query.bot.send_message(user_id, f'Сообщение от {us.fio} {us.username}\n\n' + m.text, reply_markup=get_message_keyboard())
-            await state.set_state(YesNoChoice.waiting_for_message_answer)
+            await show_next_inbox_message(callback_query.bot, user_id, state)
+
+        case 'shop':
+            await callback_query.message.answer('Главное меню магазина', reply_markup=get_shop_rpg_organizer())
+            await state.set_state(Shop.rpg_choice)
+
+        case "zags":
+            await callback_query.message.answer("ЗАГС.", reply_markup=get_student_zags_keyboard())
+            await state.set_state(ZAGS.waiting_for_choice)
 
         case "mailing":
             await callback_query.message.answer("Выберете получателей рассылки.\n", reply_markup=get_maling_adresat())
@@ -622,14 +743,14 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
             await callback_query.message.answer("На что будет жалоба.", reply_markup=get_complaint_keyboard())
             await state.set_state(MainMenu.complaint)
 
-        case "help":
-            await callback_query.message.answer("Помощь.\n(Здесь будет справка для команды рейтинга.)")
+        case 'isk':
+            await export_isks_excel(callback_query.message)
 
         case _:
             await callback_query.message.answer("Команда не распознана.")
 
 @router.callback_query(MainMenu.main_menu_media)
-async def show_main_chief_organizer(callback_query: Message, state: FSMContext):
+async def show_main_chief_organizer(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
     role = getattr(active_sessions.get(user_id), "role", None)
@@ -653,8 +774,13 @@ async def show_main_chief_organizer(callback_query: Message, state: FSMContext):
             await callback_query.message.answer("На что будет жалоба.", reply_markup=get_complaint_keyboard())
             await state.set_state(MainMenu.complaint)
 
-        case "help":
-            await callback_query.message.answer("Помощь.\n(Здесь будет справка для медиа.)")
+        case "zags":
+            await callback_query.message.answer("ЗАГС.", reply_markup=get_student_zags_keyboard())
+            await state.set_state(ZAGS.waiting_for_choice)
+
+        case 'isk':
+            await callback_query.message.answer('От кого будет иск?')
+            await state.set_state(Isk.waiting_for_from)
 
         case _:
             await callback_query.message.answer("Команда не распознана.")
@@ -696,42 +822,23 @@ async def show_student_help(callback_query: CallbackQuery, state: FSMContext):
             await callback_query.message.answer("Команда не распознана.")
     await show_main_menu(callback_query.bot, user_id, state)
 
-@router.message(MainMenu.message_to_admin)
-async def process_message_to_admin(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    message_text = message.text
-    await add_message(
-        ms(
-            user_id=user_id,
-            adresat="Рейтинг",
-            badge_number=0,
-            text=message_text,
-        )
-    )
-    await message.answer("Ваше сообщение отправлено администрации. Спасибо.")
-    await show_main_menu(message.bot, user_id, state)
-
 @router.message(MainMenu.message_to_rating_team)
 async def process_message_to_rating_team(message: Message, state: FSMContext):
     user_id = message.from_user.id
     role = getattr(active_sessions.get(user_id), "role", None)
     badge = active_sessions[user_id].badge_number
-    if role != "Администратор" and role != "Медиа":
-        return
-    match role:
-        case "Администратор":
-            adresat = "Администраторы по комнатам"
-        case "Медиа":
-            adresat = "Медиа"
-    await add_message(
-        ms(
-            user_id=user_id,
-            adresat=adresat,
-            badge_number=badge,
-            text=message.text,
+    acess = await get_message_access(user_id)
+    if acess:
+        await add_message(
+            ms(
+                user_id=user_id,
+                badge_number=badge,
+                text=message.text,
+            )
         )
-    )
-    await message.answer("Ваше сообщение отправлено команде рейтинга. Спасибо.")
+        await message.answer("Ваше сообщение отправлено отделу справедливости. Спасибо.")
+    else:
+        await message.answer("Можно написать только одно сообщение раз в полчаса")
     await show_main_menu(message.bot, user_id, state)
 
 """COMPLAINTS"""
@@ -773,7 +880,7 @@ async def process_complaint_callback(callback_query: Message, state: FSMContext)
         "other": "Другое"
     }
     if user_id not in complaintes:
-        complaintes[user_id] = Complaint(user_id=user_id, status="Новая")
+        complaintes[user_id] = Complaint(user_id=user_id, status="new")
         complaints_adresat[user_id] = roles[data]
     if roles[data] != 'Участник' and roles[data] != 'Организатор':
         complaintes[user_id].status = data
@@ -858,17 +965,11 @@ async def process_complaint_violation_type(callback_query: CallbackQuery, state:
         3: 'Употребление никотиносодержащей продукции в неположенном месте',
         4: 'Нецензурная речь'
     }
-    c3 = {
-        1: 'Пропуск программных моментов без уважительной причины',
-        2: 'Оскорбления/конфликты на почве розни'
-    }
     match complaintes[user_id].status:
         case 'alert':
             complaintes[user_id].violetion = c1[data]
         case 'soon':
             complaintes[user_id].violetion = c2[data]
-        case _:
-            complaintes[user_id].violetion = c3[data]
     await callback_query.message.answer("Опишите вашу жалобу подробно.")
     await state.set_state(ComplaintProcess.waiting_for_complaint_text)
 
@@ -1047,11 +1148,16 @@ async def process_users_callback(callback_query: CallbackQuery, state: FSMContex
             return
         case 'all_users':
             users = await get_all_users()
+            act = await get_all_active()
             mes = "Список всех пользователей:\n"
             i = 0
             for user in users:
                 if i == 39:
-                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}\n"
+                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, "
+                    if user.tg_id in act:
+                        mes += 'Зарегестрирован\n'
+                    else:
+                        mes += 'Не зарегестрирован\n'
                     await callback_query.bot.send_message(chat_id=user_id, text=mes, reply_markup=get_users_keyboard())
                     mes = ''
                     i = 0
@@ -1274,6 +1380,12 @@ async def process_fio(message: Message, state: FSMContext):
         print(USERS)
         user = await get_user(user_id)
         active_sessions[user_id] = user
+    await update_tg_id(
+            registration[user_id].badge_number,
+            user_id,
+            message.from_user.username,
+            team_number=registration[user_id].badge_number//100
+    )
     await message.answer("Регистрация завершена! Спасибо.")
     await add_active(user_id, active_sessions[user_id].role)
     await show_main_menu(message.bot, user_id, state)
@@ -1312,38 +1424,70 @@ async def _send_mailing_payload(bot, tg_id: int, message: Message):
     text = (message.text or "").strip()
     await bot.send_message(tg_id, text)
 
-@router.message(
-    Mailing.waiting_for_mailing_text,
-    F.content_type.in_({"text", "photo", "video", "voice", "video_note"}))
-async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
+@router.message(Mailing.waiting_for_mailing_text, F.content_type == "text")
+async def handle_mailing_text_stage(message: Message, state: FSMContext, bot: Bot):
     user_id = message.from_user.id
-    user = await get_user(user_id)
-
-    if (
-        (message.content_type == "text" and not (message.text or "").strip())
-        or (message.content_type != "text" and not (message.caption or "").strip() and not message.video_note)
-    ):
-        await message.answer("Пришли текст или прикрепи фото/видео/голосовое/кружочек (можно с подписью).")
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer("Пришли текст рассылки.")
         return
+
+    await state.update_data(mailing_text=text, mailing_has_files=False)
+
+    await message.answer(
+        "Текст сохранён.\n"
+        "Если хочешь – прикрепи фото/видео/голосовое/кружочек.\n"
+        "Если не нужно – отправь «-»"
+    )
+    await state.set_state(Mailing.waiting_files)
+
+@router.message(Mailing.waiting_files, F.content_type.in_({"text", "photo", "video", "voice", "video_note"}))
+async def handle_mailing_files_stage(message: Message, state: FSMContext, bot: Bot):
+    user_id = message.from_user.id
+    data = await state.get_data()
+    text = (data.get("mailing_text") or "").strip()
+
+    has_files = False
+    if message.content_type == "text":
+        if (message.text or "").strip() != "-":
+            await message.answer("Пришли файл (фото/видео/голосовое/кружочек) или «-» чтобы отправить только текст.")
+            return
+    else:
+        has_files = True
 
     match maling[user_id]:
         case "user":
             u = maling_special[user_id]
-            if u.tg_id:
-                if u.tg_id < 1000:
-                    await message.answer("У пользователя подозрительный id, возможно он еще не в системе и письмо не дошло")
-                await _send_mailing_payload(message.bot, u.tg_id, message)
-                await message.answer("Сообщение отправлено успешно")
-            else:
+            if not u.tg_id:
                 await message.answer("У этого пользователя пока нет id он не в системе!")
+                await show_main_menu(message.bot, user_id, state)
+                return
+
+            if u.tg_id not in active_sessions:
+                await message.answer("Пользователь еще не зарегистрирован в боте")
+                await show_main_menu(message.bot, user_id, state)
+                return
+
+            if has_files:
+                await message.bot.send_message(u.tg_id, text)
+                await _send_mailing_payload(message.bot, u.tg_id, message)
+            else:
+                await message.bot.send_message(u.tg_id, text)
+
+            await message.answer("Сообщение отправлено успешно")
 
         case "team":
             team = maling_special[user_id]
             users = await get_users_by_team(team.team_number)
             c = 0
             for i in users:
-                if i.tg_id:
-                    await _send_mailing_payload(message.bot, i.tg_id, message)
+                print(i.fio, i.team_number)
+                if i.tg_id in active_sessions:
+                    if has_files:
+                        await message.bot.send_message(i.tg_id, text)
+                        await _send_mailing_payload(message.bot, i.tg_id, message)
+                    else:
+                        await message.bot.send_message(i.tg_id, text)
                     c += 1
             await message.answer(f"Отправлено {c} сообщений участников комманды из {len(users)}")
 
@@ -1351,8 +1495,12 @@ async def handle_mailing_text(message: Message, state: FSMContext, bot: Bot):
             users = await get_all_users()
             c = 0
             for i in users:
-                if i.tg_id and i.tg_id > 1000 and i.tg_id in active_sessions:
-                    await _send_mailing_payload(message.bot, i.tg_id, message)
+                if i.tg_id in active_sessions:
+                    if has_files:
+                        await message.bot.send_message(i.tg_id, text)
+                        await _send_mailing_payload(message.bot, i.tg_id, message)
+                    else:
+                        await message.bot.send_message(i.tg_id, text)
                     c += 1
             await message.answer(f"Отправлено {c} сообщений участникам из {len(users)}")
 
@@ -1369,10 +1517,8 @@ async def process_maling_choose(message: CallbackQuery, state: FSMContext):
             await message.message.answer("Введите номер бейджа человека")
         case "team":
             await message.message.answer("Введите номер команды")
-        case "trek":
-            await message.message.answer("Введите номер трека")
         case "all":
-            await message.message.answer("Пришли текст или прикрепи фото/видео/голосовое/кружочек (можно с подписью)")
+            await message.message.answer("Пришли текст")
             await state.set_state(Mailing.waiting_for_mailing_text)
             return
 
@@ -1390,7 +1536,7 @@ async def process_maling_adresat(message: Message, state: FSMContext):
                 if not user:
                     await message.answer("Такого пользователя не существуют попробуйте еще раз")
                     return
-                await message.answer("Пришли текст или прикрепи фото/видео/голосовое/кружочек (можно с подписью)")
+                await message.answer("Пришлите текст")
                 maling_special[user_id] = user
             else:
                 await message.answer("Номер бейджа должен быть числом, пришлите еще раз")
@@ -1402,17 +1548,8 @@ async def process_maling_adresat(message: Message, state: FSMContext):
                 if not team:
                     await message.answer("Такой команды не существует попробуйте еще раз")
                     return
-                await message.answer("Пришли текст или прикрепи фото/видео/голосовое/кружочек (можно с подписью)")
+                await message.answer("Пришлите текст")
                 maling_special[user_id] = team
-            else:
-                await message.answer("Номер бейджа должен быть числом, пришлите еще раз")
-                return
-
-        case "trek":
-            if text.isdigit():
-                await message.answer("Не, я пока балдеЮ")
-                await show_main_menu(message.bot, user_id, state)
-                return
             else:
                 await message.answer("Номер бейджа должен быть числом, пришлите еще раз")
                 return
@@ -1691,6 +1828,10 @@ async def process_bonus_amount(message: Message, state: FSMContext):
 async def process_product_choice(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     await state.update_data(choice=callback_query.data)
+    products = await get_products_shop()
+    if products:
+        for i in products:
+            await callback_query.bot.send_message(user_id, i)
     await callback_query.message.answer('Введите название продукта')
     await state.set_state(Products.wait_for_product_name)
 
@@ -1858,9 +1999,17 @@ async def process_shop_choice(callback_query: CallbackQuery, state: FSMContext):
             await callback_query.message.answer("Магазин.", reply_markup=get_student_shop_keyboard())
             await state.set_state(Shop.wait_for_choice_action)
         case 'tasks':
-            await callback_query.message.answer('Скоро тут появятся задания, их можно будет выполнять')
-            await callback_query.message.answer("Магазин.", reply_markup=get_student_shop_keyboard())
-            await state.set_state(Shop.wait_for_choice_action)
+            t = await get_user_task(user.badge_number)
+            if t:
+                tas = await get_task(t)
+                await callback_query.message.answer(f'Ваш контракт {tas.id}\nОписание: {tas.description}')
+                await show_main_menu(callback_query.bot, user_id, state)
+                return
+            else:
+                tasks = await get_all_tasks_string()
+                await callback_query.message.answer('Контракты в наличии, введите номер контракта для получения')
+                await callback_query.bot.send_message(user_id, tasks)
+                await state.set_state(Task.waiting_for_task_number)
         case 'give_promo':
             await callback_query.message.answer('Введите промокод')
             await state.set_state(PromoCreate.waiting_for_phrase_user)
@@ -1972,9 +2121,8 @@ async def process_complite_buy(callback_query: CallbackQuery, state: FSMContext)
             await buy_product(product.cost, user.badge_number)
             await product_sold(product.id, user.badge_number)
             if adr:
-                await notify_rpg_buy(callback_query.bot, adr, product)
-            else:
-                await notify_rpg_buy(callback_query.bot, user, product)
+                if adr.tg_id:
+                    await callback_query.bot.send_message(adr.tg_id, f'Вам подарили {product.name}')
             await callback_query.message.answer('Товар приобретен!')
         case _:
             await callback_query.message.answer('Покупка отменена')
@@ -1995,13 +2143,6 @@ async def process_rpg_shop(callback_query: CallbackQuery, state: FSMContext):
             await state.set_state(Bonus.waiting_adresat)
 
         case "edit_products":
-            products = await get_products_shop()
-            if not products:
-                await callback_query.message.answer('Пока магазин пуст, возвращайтесь позже')
-                await show_main_menu(callback_query.bot, user_id, state)
-            if products:
-                for i in products:
-                    await callback_query.bot.send_message(user_id, i)
             await callback_query.message.answer('Выберете дейстивие', reply_markup=get_edit_product_choice())
             await state.set_state(Products.wait_choice_action)
 
@@ -2019,6 +2160,12 @@ async def process_rpg_shop(callback_query: CallbackQuery, state: FSMContext):
             await callback_query.message.answer('Выберете дейстивие', reply_markup=get_edit_product_choice())
             await state.set_state(Products.wait_choice_action)
         
+        case 'tasks':
+            tasks = await get_all_tasks_string()
+            await callback_query.bot.send_message(user_id, tasks)
+            await callback_query.message.answer('Контракты', reply_markup=get_get_task_keyboard())
+            await state.set_state(Task.waiting_task_choice)
+            
         case _:
             await show_main_menu(callback_query.bot, user_id, state)    
 
@@ -2039,21 +2186,63 @@ async def process_zags_choice(callback_query: CallbackQuery, state: FSMContext):
         case _:
             await show_main_menu(callback_query.bot, user_id, state)
 
+@router.callback_query(ZAGS.rpg_choice)
+async def zags_rpg(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    await state.update_data(choice=data)
+    match data:
+        case 'show_families':
+            fams = await get_all_families_strings()
+            for i in fams:
+                await callback_query.bot.send_message(user_id, i)
+            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
+        
+        case 'show_sons':
+            sons = await get_sons_strings()
+            for i in sons:
+                await callback_query.bot.send_message(user_id, i)
+            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
+
+        case 'married':
+            await callback_query.message.answer('Введите номер бейджа кому предложение')
+            await state.set_state(ZAGS.waiting_for_badge)
+
+        case 'son':
+            await callback_query.message.answer('Введите номер бейджа человека, которого хотите усыновить')
+            await state.set_state(ZAGS.waiting_for_badge)
+
 @router.message(ZAGS.waiting_for_badge)
 async def process_zags_badge(message: Message, state: FSMContext):
-    user_id = callback_query.from_user.id
+    user_id = message.from_user.id
     text = message.text
     data = await state.get_data()
     if not text.isdigit():
         await message.answer('Номер должен быть числом введите еще раз')
         return 
-    user = await get_user(user_id)
+    user = await get_user_by_badge(active_sessions[user_id].badge_number)
     adr = await get_user_by_badge(int(text))
     if not adr:
         await message.answer('Такого человека не существует')
         return 
+    if user.badge_number == adr.badge_number:
+        match data.get('choice'):
+            case 'married':
+                await message.answer('Нельзя заключить брак с самим собой')
+            case 'son':
+                await message.answer('Нельзя усыновить/удочерить себя')
+        await show_main_menu(message.bot, user_id, state)
+        return
     match data.get('choice'):
         case 'married':
+            if await is_family(user.badge_number) or await is_family(adr.badge_number):
+                await message.answer('Вы или выбранный вами человек уже состоите в браке')
+                await show_main_menu(message.bot, user_id, state)
+                return
+            if await is_son_pair_exists(user.badge_number, adr.badge_number) or await is_son_pair_exists(adr.badge_number, user.badge_number):
+                await message.answer('Вы не можете заключить брак со своим сыном/дочерью')
+                await show_main_menu(message.bot, user_id, state)
+                return
             if adr.gender == user.gender:
                 await message.answer('Браки могут составляться только между мужчиной и женщиной')
                 return 
@@ -2061,6 +2250,14 @@ async def process_zags_badge(message: Message, state: FSMContext):
             await state.update_data(badge=int(text))
             await state.set_state(ZAGS.waiting_for_fio)
         case 'son':
+            if await is_sone(adr.badge_number):
+                await message.answer('Выбранного вами человека уже удочерили или усыновили')
+                await show_main_menu(message.bot, user_id, state)
+                return
+            if await get_spouse_badge(active_sessions[user_id].badge_number):
+                await message.answer('Вы не можете усыновить/удочерить своего супруга')
+                await show_main_menu(message.bot, user_id, state)
+                return
             await message.answer('Чью фамилию выбираете', reply_markup=get_married_second_name())
             await state.update_data(badge=int(text))
             await state.set_state(ZAGS.waiting_for_fio)
@@ -2070,7 +2267,20 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     data = callback_query.data
     dat = await state.get_data()
-    badge_number = dat.get('badge_number')
+    badge_number = dat.get('badge')
+    fam = {
+        'mine': 'взять его',
+        'his': 'взять вашу',
+        'twice': 'взять двойную',
+        'as_it': 'остаться при своих фамилиях'
+    }
+    f = {
+        'mine': 'взять ее',
+        'his': 'взять вашу',
+        'twice': 'двойную',
+        'as_it': 'остаться при своих фамилиях'
+    }
+    user = await get_user(user_id)
     adr = await get_user_by_badge(badge_number)
     if not adr.tg_id:
         await callback_query.message.answer('Пользователь еще не зарегестрировался в боте, попробуйте снова позже')
@@ -2078,103 +2288,67 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
         match dat.get('choice'):
             case 'married':
                 await create_family_request(adr.badge_number, user.badge_number, data)
-                await callback_query.bot.send_message(
-                    adr.tg_id,
-                    f"{user.fio} предлагает завести семью. Согласен(на)?",
-                    reply_markup=get_family_yes_no_keyboard(),
-                )
-                await callback_query.message.answer("Отправил(а) запрос адресату.")
+                if user.gender == 'М':
+                    await callback_query.bot.send_message(
+                        adr.tg_id,
+                        f"{user.fio} @{user.username} сделал вам предложение. Предлагает {fam[data]} фамилию. Согласена?",
+                        reply_markup=get_family_yes_no_keyboard(),
+                    )
+                else:
+                    if adr.tg_id in active_sessions:
+                        await callback_query.bot.send_message(
+                            adr.tg_id,
+                            f"{user.fio} @{user.username} сделала вам предложение. Предлагает {f[data]} фамилию. Согласен?",
+                            reply_markup=get_family_yes_no_keyboard(),
+                        )
+                        await callback_query.message.answer("Отправил(а) запрос адресату.")
+                    else:
+                        await callback_query.bot.send_message(user_id, 'Этот пользователь еще не зарегестрирован в боте')
                 await show_main_menu(callback_query.bot, user_id, state)
             
             case 'son':
-                sons[adr.tg_id] = await add_son(active_sessions[user_id].badge_number, badge_number, fio = data)
-                if adr.gender == 'М':
-                    await callback_query.bot.send_message(adr.tg_id, f'Вас хочет усыновить {active_sessions[user_id].fio}')
+                if adr.tg_id in active_sessions:
+                    sons[adr.tg_id] = await add_son(active_sessions[user_id].badge_number, badge_number, fio=data)
+                    if adr.gender == 'М':
+                        await callback_query.bot.send_message(adr.tg_id, f'Вас хочет усыновить {active_sessions[user_id].fio} @{active_sessions[user_id].username}', reply_markup=get_sonning())
+                    else:
+                        await callback_query.bot.send_message(adr.tg_id, f'Вас хочет удочерить {active_sessions[user_id].fio} @{active_sessions[user_id].username}', reply_markup=get_sonning())
+                    await callback_query.message.answer('Предложение отправлено')
                 else:
-                    await callback_query.bot.send_message(adr.tg_id, f'Вас хочет удочерить {active_sessions[user_id].fio}')
-                await callback_query.message.answer('Предложение отправлено')
+                    await callback_query.bot.send_message(user_id, 'Этот пользователь еще не зарегестрирован в боте')
                 await show_main_menu(callback_query.bot, user_id, state)
-
-@router.callback_query(F.data.in_({"family_yes", "family_no"}))
-async def family_answer(callback_query: CallbackQuery, state: FSMContext):
-    user_id = callback_query.from_user.id
-    me = await get_user(user_id)
-    if not me:
-        return
-
-    req = await get_family_request_by_badge(me.badge_number)
-    if not req or req[2] != "pending":
-        await callback_query.message.answer("Активного запроса на семью нет.")
-        return
-
-    badge_number, badge_from, status, fio_choice = req
-    sender = await get_user_by_badge(badge_from)
-
-    match callback_query.data:
-        case "family_yes":
-            await callback_query.message.answer("Ок. Выбери фамилию.", reply_markup=get_married_second_name())
-            await state.update_data(family_from_badge=badge_from, family_fio_choice=fio_choice)
-            await state.set_state(Married.waiting_for_second_name)
-        case "family_no":
-            await delete_family_by_badge(me.badge_number)
-
-            if sender and sender.tg_id:
-                await callback_query.bot.send_message(
-                    sender.tg_id,
-                    f"{me.fio} отказал(а) в создании семьи. Брак не будет заключен."
-                )
-            await callback_query.message.answer("Ок. Я уведомил(а) отправителя и удалил(а) заявку.")
-
-@router.callback_query(Married.waiting_for_second_name)
-async def family_second_name(callback_query: CallbackQuery, state: FSMContext):
-    user_id = callback_query.from_user.id
-    me = await get_user(user_id)
-    await set_family_second(me.badge_number, callback_query.data)
-    await set_family_status(me.badge_number, 'created')
-
-@router.callback_query(ZAGS.rpg_choice)
-async def zags_rpg(callback_query: CallbackQuery, state: FSMContext):
-    user_id = callback_query.from_user.id
-    data = callback_query.data
-    match data:
-        case 'show_families':
-            fams = await get_all_families_strings()
-            for i in fams:
-                await callback_query.bot.send_message(user_id, i)
-            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
-        case 'show_sons':
-            sons = await get_sons_strings()
-            for i in sons:
-                await callback_query.bot.send_message(user_id, i)
-            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
 
 """GIFTS"""
 
-@router.callback_query(Gift.waiting_for_badge)
+@router.message(Gift.waiting_for_badge_number)
 async def process_gift_badge(message: Message, state: FSMContext):
-    user_id = callback_query.from_user.id
+    user_id = message.from_user.id
     text = message.text
     if not text.isdigit():
         await message.answer('Номер должен быть числом введите еще раз')
         return 
+    if int(text) < 100 or int(text) > 1000:
+        await message.answer('Номер должен быть от 100 до 999, введите еще раз')
+        return
     adr = await get_user_by_badge(int(text))
     if not adr:
         await message.answer('Такого пользователя не существует введите еще раз')
         return 
     await message.answer('Введите текст поощрения')
+    await state.update_data(ba=int(text))
     await state.set_state(Gift.waiting_for_text)
 
-@router.callback_query(Gift.waiting_for_text)
+@router.message(Gift.waiting_for_text)
 async def process_gift_text(message: Message, state: FSMContext):
-    user_id = callback_query.from_user.id
+    user_id = message.from_user.id
     text = message.text
     data = await state.get_data()
     user = await get_user(user_id)
-    await add_thanks(user.badge_number, data.get('badge_number'), text)
+    await add_thanks(data.get('ba'), user.badge_number, text)
     await message.answer('Заявка на поощрение отослана')
     await show_main_menu(message.bot, user_id, state)
 
-@router.callback_query(F.data == "gift_decline")
+@router.callback_query(Gift.acept, F.data == "gift_decline")
 async def gift_decline(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     role = getattr(active_sessions.get(user_id), "role", None)
@@ -2192,7 +2366,7 @@ async def gift_decline(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer("Отказано")
     await show_next_gift(callback_query.bot, user_id, state)
 
-@router.callback_query(F.data == "gift_accept")
+@router.callback_query(Gift.acept, F.data == "gift_accept")
 async def gift_accept(callback_query: CallbackQuery, state: FSMContext):
     user_id = callback_query.from_user.id
     role = getattr(active_sessions.get(user_id), "role", None)
@@ -2206,10 +2380,8 @@ async def gift_accept(callback_query: CallbackQuery, state: FSMContext):
         return
 
     thanks_id, badge_user, badge_from, text, status = req
-    await state.update_data(gift_thanks_id=int(thanks_id), gift_badge_user=int(badge_user))
     await callback_query.message.answer(f"Введите кол-во бонусов для заявки #{thanks_id}")
     await state.set_state(Gift.bonus)
-    await callback_query.answer()
 
 @router.message(Gift.bonus)
 async def gift_bonus_input(message: Message, state: FSMContext):
@@ -2222,11 +2394,9 @@ async def gift_bonus_input(message: Message, state: FSMContext):
     if not txt.isdigit() or int(txt) <= 0:
         await message.answer("Нужно число больше 0. Пришли ещё раз.")
         return
-
+    
+    thanks_id, badge_user, badge_from, text, status = gift_req.get(user_id)
     amount = int(txt)
-    data = await state.get_data()
-    thanks_id = int(data.get("gift_thanks_id", 0))
-    badge_user = int(data.get("gift_badge_user", 0))
 
     if not thanks_id or not badge_user:
         await message.answer("Не нашёл заявку. Открой «Подарки» заново.")
@@ -2234,12 +2404,157 @@ async def gift_bonus_input(message: Message, state: FSMContext):
         await show_main_menu(message.bot, user_id, state)
         return
 
-    await add_bonus(badge_user, amount)
+    await add_rating(badge_user, amount)
     await set_gift_status(thanks_id, "done")
 
     await message.answer(f"Начислено {amount} бонусов. Заявка #{thanks_id} закрыта.")
     await state.set_state(MainMenu.main_menu_rating_team)
     await show_next_gift(message.bot, user_id, state)
+
+"""TASKS"""
+@router.callback_query(Task.waiting_task_choice)
+async def process_task_action(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    data = callback_query.data
+    match data:
+        case "create_task":
+            await callback_query.message.answer('Введите описание и условие контракта')
+            await state.set_state(Task.waiting_for_text)
+        case "see_task":
+            await callback_query.message.answer('Введите номер Контракта')
+            await state.set_state(Task.waiting_task_see_number)
+
+@router.message(Task.waiting_task_see_number)
+async def process_task_see_number(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    if not text.isdigit():
+        await message.answer('Цена должна быть числом')
+        return
+    t = await get_process_task(int(text))
+    if not t:
+        await message.answer('Этот Контракт не выполняется')
+        await show_main_menu(message.bot, user_id, state)
+        return 
+    process_tasks[user_id] = t
+    await message.answer('Контракт выполнен?', reply_markup=get_task_acept())
+    await state.set_state(Task.waaiting_task_acept)
+
+@router.callback_query(Task.waaiting_task_acept)
+async def process_task_acept(callbask_query: CallbackQuery, state: FSMContext):
+    user_id = callbask_query.from_user.id
+    data = callbask_query.data
+    t = process_tasks[user_id]
+    match data:
+        case 'task:yes':
+            a = int(t.price) + int(t.bonus)
+            print(a)
+            if not t.us:
+                await callback_query.message.answer("Не указан получатель контракта")
+                return
+            await add_bonus(t.us, a)
+            await callbask_query.message.answer('Контракт защитан!')
+            t.status = 'success'
+            await update_task(t)
+        case 'task:no':
+            await callbask_query.message.answer('Контракт не защитан')
+            t.status = 'failure'
+            await update_task(t)
+    await show_main_menu(callbask_query.bot, user_id, state)
+
+@router.message(Task.waiting_for_text)
+async def process_task_description(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    await state.update_data(text=text)
+    await message.answer('Введите стоимость контракта')
+    await state.set_state(Task.waiting_for_price)
+
+@router.message(Task.waiting_for_price)
+async def process_task_price(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    if not text.isdigit():
+        await message.answer('Цена должна быть числом')
+        return
+    await state.update_data(price=int(text))
+    await message.answer('Введите вознаграждение')
+    await state.set_state(Task.waiting_for_bonus)
+
+@router.message(Task.waiting_for_bonus)
+async def process_task_bonus(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    badge_number = active_sessions[user_id].badge_number
+    text = message.text
+    data = await state.get_data()
+    if not text.isdigit():
+        await message.answer('Цена должна быть числом')
+        return
+    i = await add_task(
+        task = Taski(
+            description=data.get("text"),
+            price=data.get("price"),
+            bonus=int(text),
+            creator=badge_number,
+        )
+    )
+    await message.answer(f'Контракт номер {i} успешно добавлено, стоимость {data.get('price')}, вознаграждение {int(text)}\n Описание: {data.get('text')}')
+    await show_main_menu(message.bot, user_id, state)
+
+@router.message(Task.waiting_for_task_number)
+async def process_task_number(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    text = message.text
+    us = await get_user_by_badge(active_sessions[user_id].badge_number)
+    if not text.isdigit():
+        await message.answer('Цена должна быть числом')
+        return
+    tas = await get_task(int(text))
+    if not task:
+        await message.answer('Вы ввели несуществующий номер')
+        return
+    bal = await get_user_balance(us.badge_number)
+    if tas.price > bal:
+        await message.answer('Вы не можете взять этот контракт, не хватает баланса')
+        await show_main_menu(message.bot, user_id, state)
+        return
+    us.balance -= tas.price
+    await update_user(us)
+    tas.status = 'process'
+    tas.us = us.badge_number
+    await update_task(tas)
+    await message.answer(f'Вы взяли контракт номер {tas.id}\nЗадание: {tas.description}')
+    await show_main_menu(message.bot, user_id, state)
+
+"""ISKS"""
+@router.message(Isk.waiting_for_from)
+async def process_isk_from(message: Message, state: FSMContext):
+    text = message.text
+    await state.update_data(fr=text)
+    await message.answer('На кого будет иск')
+    await state.set_state(Isk.waiting_for_adresat)
+
+@router.message(Isk.waiting_for_adresat)
+async def process_isk_adr(message: Message, state: FSMContext):
+    text = message.text
+    await state.update_data(adr=text)
+    await message.answer('Введите обвинения')
+    await state.set_state(Isk.waiting_for_text)
+
+@router.message(Isk.waiting_for_text)
+async def process_isk_text(message: Message, state: FSMContext):
+    text = message.text
+    await state.update_data(text=text)
+    await message.answer('Введите предлагаемое наказание')
+    await state.set_state(Isk.waiting_for_fine)
+
+@router.message(Isk.waiting_for_fine)
+async def process_isk_fine(message: Message, state: FSMContext):
+    text = message.text
+    data = await state.get_data()
+    await add_isk(data.get('fr'), data.get('adr'), data.get('text'), message.text)
+    await message.answer('Иск подан!')
+    await show_main_menu(message.bot, message.from_user.id)
 
 """UPLOAD/EXPORT CSV FILES"""
 UPLOAD_RATING_PARTICIPANTS = "upload_rating_participants"
@@ -2273,14 +2588,25 @@ def _read_csv_rows(text: str, delimiter: str) -> list[list[str]]:
 
 def _rows_from_csv_bytes(data: bytes) -> list[dict]:
     text = data.decode("utf-8-sig", errors="replace")
+
     all_rows = _read_csv_rows(text, ";")
     if not all_rows:
         return []
+
     if all(len(r) <= 1 for r in all_rows) and "," in text:
         all_rows = _read_csv_rows(text, ",")
 
     header = [c.strip() for c in all_rows[0]]
-    expected = ["badge_number", "full_name", "team_id", "daily_base", "penalties_sum", "bonuses_sum", "total_points", "updated_at"]
+    expected = [
+        "badge_number",
+        "full_name",
+        "team_id",
+        "daily_base",
+        "penalties_sum",
+        "bonuses_sum",
+        "total_points",
+        "updated_at",
+    ]
 
     has_header = False
     if len(header) >= 7:
@@ -2289,15 +2615,14 @@ def _rows_from_csv_bytes(data: bytes) -> list[dict]:
             has_header = True
 
     start_idx = 1 if has_header else 0
-    rows = []
+    rows: list[dict] = []
 
     for r in all_rows[start_idx:]:
         r = list(r) + [""] * (8 - len(r))
+
         badge_number = _parse_int(r[0], default=-1)
         if badge_number <= 0:
             continue
-
-        updated_at = _parse_text(r[7]) or now_iso()
 
         rows.append(
             {
@@ -2308,50 +2633,7 @@ def _rows_from_csv_bytes(data: bytes) -> list[dict]:
                 "penalties_sum": _parse_int(r[4], default=0),
                 "bonuses_sum": _parse_int(r[5], default=0),
                 "total_points": _parse_int(r[6], default=0),
-                "updated_at": updated_at,
-            }
-        )
-
-    return rows
-
-def _rows_from_rating_teams_csv_bytes(data: bytes) -> list[dict]:
-    text = data.decode("utf-8-sig", errors="replace")
-    all_rows = _read_csv_rows(text, ";")
-    if not all_rows:
-        return []
-    if all(len(r) <= 1 for r in all_rows) and "," in text:
-        all_rows = _read_csv_rows(text, ",")
-
-    header = [c.strip().lower() for c in all_rows[0]]
-    expected = ["team_number", "team_name", "team_total_points", "updated_at"]
-    has_header = all(x in header for x in expected[:2])
-
-    start_idx = 1 if has_header else 0
-    rows = []
-
-    for r in all_rows[start_idx:]:
-        r = list(r) + [""] * (4 - len(r))
-        if has_header:
-            header_map = {name: idx for idx, name in enumerate(header)}
-            team_number = _parse_int(r[header_map.get("team_number", 0)], default=-1)
-            team_name = _parse_text(r[header_map.get("team_name", 1)])
-            team_total_points = _parse_int(r[header_map.get("team_total_points", 2)], default=0)
-            updated_at = _parse_text(r[header_map.get("updated_at", 3)]) or now_iso()
-        else:
-            team_number = _parse_int(r[0], default=-1)
-            team_name = _parse_text(r[1])
-            team_total_points = _parse_int(r[2], default=0)
-            updated_at = _parse_text(r[3]) or now_iso()
-
-        if team_number <= 0:
-            continue
-
-        rows.append(
-            {
-                "team_number": team_number,
-                "team_name": team_name,
-                "team_total_points": team_total_points,
-                "updated_at": updated_at,
+                "updated_at": _parse_text(r[7]) or now_iso(),
             }
         )
 
@@ -2420,7 +2702,7 @@ async def upload_reiting_cmd(message: Message, state: FSMContext):
     await state.set_state(RatingCSV.waiting_for_upload_choice)
     await message.answer("Выбери тип файла для загрузки.", reply_markup=get_upload_csv_keyboard())
 
-@router.callback_query(RatingCSV.waiting_for_upload_choice, lambda c: c.data in {UPLOAD_RATING_PARTICIPANTS, UPLOAD_RATING_TEAMS, UPLOAD_PARTICIPANTS})
+@router.callback_query(RatingCSV.waiting_for_upload_choice, lambda c: c.data in {UPLOAD_RATING_PARTICIPANTS, UPLOAD_PARTICIPANTS})
 async def select_upload_csv_type(callback_query: CallbackQuery, state: FSMContext):
     user = await get_user(callback_query.from_user.id)
     role = user.role
@@ -2438,7 +2720,7 @@ async def select_upload_csv_type(callback_query: CallbackQuery, state: FSMContex
     elif callback_query.data == UPLOAD_RATING_TEAMS:
         prompt = "Пришли .csv файл с рейтингом команд (team_number; team_name; team_total_points; updated_at)."
     else:
-        prompt = "Пришли .csv файл с участниками (badge; fio; role)."
+        prompt = "Пришли .csv файл с участниками (badge; fio; role, gender)."
 
     await callback_query.message.answer(prompt)
 
@@ -2472,6 +2754,27 @@ async def upload_reiting_file(message: Message, state: FSMContext):
         if not rows:
             await message.answer("Не нашёл валидных строк. Проверь формат файла.")
             return
+        async with aiosqlite.connect(DB_PATH) as db:
+            for row in rows:
+                badge_number = row.get("badge_number")
+                total_points = row.get("total_points")
+
+                if not badge_number or total_points is None:
+                    continue
+
+                await db.execute(
+                    """
+                    UPDATE users
+                    SET reiting = ?
+                    WHERE badge_number = ?
+                    """,
+                    (total_points, badge_number),
+                )
+
+            await db.commit()
+
+        await message.answer(f"Обновлён рейтинг для {len(rows)} участников.")
+
         n = await upsert_rating_rows(rows)
         await recalc_team_totals()
     elif upload_type == UPLOAD_RATING_TEAMS:
@@ -2479,13 +2782,32 @@ async def upload_reiting_file(message: Message, state: FSMContext):
         if not rows:
             await message.answer("Не нашёл валидных строк. Проверь формат файла.")
             return
+        async with aiosqlite.connect(DB_PATH) as db:
+            for row in rows:
+                badge_number = row.get("team_number")
+                total_points = row.get("team_total_points")
+
+                if not badge_number or total_points is None:
+                    continue
+
+                await db.execute(
+                    """
+                    UPDATE teams
+                    SET reiting = ?
+                    WHERE team_number = ?
+                    """,
+                    (total_points, badge_number),
+                )
+
+            await db.commit()
+
+        await message.answer(f"Обновлён рейтинг для {len(rows)} команд.")
         n = await upsert_rating_team_rows(rows)
     else:
         rows = _rows_from_participants_csv_bytes(content)
         if not rows:
             await message.answer("Не нашёл валидных строк. Проверь формат файла.")
             return
-        print(rows)
         for row in rows:
             await add_user(
                 User(
@@ -2497,6 +2819,7 @@ async def upload_reiting_file(message: Message, state: FSMContext):
                     badge_number=row["badge_number"],
                     reiting=row["reiting"],
                     balance=row["balance"],
+                    gender=row["gender"],
                     date_registered=row["date_registered"],
                 )
             )
@@ -2688,70 +3011,57 @@ async def _export_rating_participants(message: Message):
 
     await message.answer_document(FSInputFile(path, filename=filename))
 
-async def _export_rating_teams(message: Message):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        await db.execute("PRAGMA foreign_keys=ON;")
-        cur = await db.execute(
-            """
-            SELECT team_number, team_name, team_total_points, updated_at
-            FROM ratingteams
-            ORDER BY team_total_points DESC, team_number
-            """
-        )
-        rows = await cur.fetchall()
-
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=";", lineterminator="\n")
-    writer.writerow(["team_number", "team_name", "team_total_points", "updated_at"])
-    for r in rows:
-        writer.writerow(
-            [
-                r["team_number"],
-                r["team_name"],
-                r["team_total_points"],
-                r["updated_at"] or "",
-            ]
-        )
-
-    filename = f"rating_teams_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    path = f"/tmp/{filename}"
-    with open(path, "wb") as f:
-        f.write(output.getvalue().encode("utf-8-sig"))
-
-    await message.answer_document(FSInputFile(path, filename=filename))
-
 async def _export_participants(message: Message):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys=ON;")
         cur = await db.execute(
             """
-            SELECT user_id, fio, team_number, role, badge_number, reiting, balance, date_registered
-            FROM users
-            ORDER BY team_number, fio
+            SELECT
+                badge_number,
+                full_name,
+                team_id,
+                daily_base,
+                penalties_sum,
+                bonuses_sum,
+                total_points,
+                updated_at
+            FROM ratings
+            ORDER BY team_id, full_name
             """
         )
         rows = await cur.fetchall()
 
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";", lineterminator="\n")
-    writer.writerow(["tg_id", "fio", "team_number", "role", "badge_number", "reiting", "balance", "date_registered"])
+    writer.writerow(
+        [
+            "badge_number",
+            "full_name",
+            "team_id",
+            "daily_base",
+            "penalties_sum",
+            "bonuses_sum",
+            "total_points",
+            "updated_at",
+        ]
+    )
+
     for r in rows:
         writer.writerow(
             [
-                r["tg_id"],
-                r["fio"] or "",
-                r["team_number"] if r["team_number"] is not None else "",
-                r["role"] or "",
-                r["badge_number"] if r["badge_number"] is not None else "",
-                r["reiting"],
-                r["balance"],
-                r["date_registered"] or "",
+                r["badge_number"],
+                r["full_name"],
+                r["team_id"] if r["team_id"] is not None else "",
+                r["daily_base"],
+                r["penalties_sum"],
+                r["bonuses_sum"],
+                r["total_points"],
+                r["updated_at"] or "",
             ]
         )
 
-    filename = f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"ratings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     path = f"/tmp/{filename}"
     with open(path, "wb") as f:
         f.write(output.getvalue().encode("utf-8-sig"))
@@ -2808,6 +3118,41 @@ async def _export_logs(message: Message):
     path = f"/tmp/{filename}"
     with open(path, "wb") as f:
         f.write(output.getvalue().encode("utf-8-sig"))
+
+    await message.answer_document(FSInputFile(path, filename=filename))
+
+async def export_isks_excel(message: Message):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            """
+            SELECT fr, adresat, text, fine, date
+            FROM isks
+            ORDER BY id
+            """
+        )
+        rows = await cur.fetchall()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Иски"
+
+    ws.append(["От", "На", "Обвинения", "Наказание", "Время подачи иска"])
+
+    for r in rows:
+        ws.append(
+            [
+                r["fr"] or "",
+                r["adresat"] or "",
+                r["text"] or "",
+                r["fine"] or "",
+                r["date"] or ""
+            ]
+        )
+
+    filename = f"isks_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    path = f"/tmp/{filename}"
+    wb.save(path)
 
     await message.answer_document(FSInputFile(path, filename=filename))
 
@@ -2916,15 +3261,17 @@ async def show_next_gift(bot, user_id: int, state: FSMContext):
 
     gift_req[user_id] = req
     thanks_id, badge_user, badge_from, text, status = req
-
+    fr = await get_user_by_badge(badge_from)
     await bot.send_message(
         user_id,
         f"Заявка #{thanks_id}\n"
         f"Кому (бейдж): {badge_user}\n"
-        f"От (бейдж): {badge_from}\n"
+        f"От (бейдж): {fr.fio}\n"
         f"Текст: {text}",
         reply_markup=get_gift_keyboard(),
     )
+
+    await state.set_state(Gift.acept)
 
 async def send_complaint_files(bot: Bot, chat_id: int, complaint_id: int):
     rows = await get_files_by_complaint_id(complaint_id)

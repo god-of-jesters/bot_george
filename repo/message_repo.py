@@ -12,7 +12,7 @@ async def add_message(message: Message):
             """,
             (
                 message.user_id,
-                message.adresat,
+                "лдфцуа",
                 message.badge_number,
                 message.text,
                 message.status,
@@ -172,3 +172,35 @@ async def get_message_access(user_id: int, minutes: int = 30) -> bool:
         return True
 
     return datetime.now() - last_dt >= timedelta(minutes=minutes)
+
+async def get_oldest_new_message():
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT id, user_id, adresat, badge_number, text, status, date_created
+            FROM messages
+            WHERE status = 'new'
+            ORDER BY id
+            LIMIT 1
+            """
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return row
+
+
+async def set_message_status(message_id: int, status: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE messages SET status = ? WHERE id = ?",
+            (status, message_id),
+        )
+        await db.commit()
+
+async def add_isk(fr: str, adr: str, text: str, fine: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO isks(fr, adresat, text, fine, date) VALUES(?, ?, ?, ?, ?)",
+            (fr, adr, text, fine, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
+        await db.commit()

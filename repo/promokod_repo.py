@@ -111,9 +111,9 @@ async def add_thanks(user: int, fr: int, text: str):
         await db.execute(
             """
             INSERT INTO thanks (badge_number_user, badge_number_from, text, status)
-            VALUES (?, ?, ?, "new")
+            VALUES (?, ?, ?, ?)
             """,
-            (user, fr, text),
+            (user, fr, text, "new"),
         )
         await db.commit()
 
@@ -135,7 +135,7 @@ async def get_oldest_request():
             """
             SELECT id, badge_number_user, badge_number_from, text, status
             FROM thanks
-            WHERE status IS NULL OR status = '' OR status = 'pending'
+            WHERE status IS NULL OR status = 'new'
             ORDER BY id ASC
             LIMIT 1
             """

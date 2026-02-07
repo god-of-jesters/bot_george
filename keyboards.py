@@ -31,8 +31,9 @@ def get_main_menu_student_keyboard():
     keyboard.button(text="Подать жалобу", callback_data="complaint")
     keyboard.button(text="Мои жалобы", callback_data="my_complaints")
     keyboard.button(text="Развлечения", callback_data="entertainment")
-    keyboard.button(text="Обращение к администрации", callback_data="message_to_admin")
-    keyboard.button(text="Помощь", callback_data="help")
+    keyboard.button(text="Обращение к организаторам", callback_data="message_to_admin")
+    keyboard.button(text="Подать иск", callback_data="isk")
+    keyboard.button(text="Правила", callback_data="help")
     keyboard.adjust(1)
     return keyboard.as_markup()
 
@@ -48,7 +49,8 @@ def get_main_menu_organizer_keyboard():
     keyboard.button(text="Жалобы в работе", callback_data="view_complaints")
     keyboard.button(text="Поощрить участника", callback_data="gift")
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
-    keyboard.button(text="Помощь", callback_data="help")
+    keyboard.button(text='ЗАГС', callback_data='zags')
+    keyboard.button(text="Подать иск", callback_data="isk")
     keyboard.adjust(2)
     return keyboard.as_markup()
 
@@ -60,7 +62,7 @@ def get_main_menu_rpg_organizer_keyboard():
     keyboard.button(text="ЗАГС", callback_data="zags")
     keyboard.button(text='Рассылка', callback_data='m')
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
-    keyboard.button(text="Помощь", callback_data="help")
+    keyboard.button(text="Подать иск", callback_data="isk")
     keyboard.adjust(2)
     return keyboard.as_markup()
 
@@ -71,7 +73,7 @@ def get_shop_rpg_organizer():
     keyboard.button(text="Получить товары", callback_data="get_products")
     keyboard.button(text="Создать промокод", callback_data="create_promo")
     keyboard.button(text="Начислить валюту", callback_data="bonus")
-    keyboard.button(text="Создать задание", callback_data="bonus")
+    keyboard.button(text="Контракты", callback_data="tasks")
     keyboard.button(text="Главное меню", callback_data="main_menu")
     keyboard.adjust(2)
     return keyboard.as_markup()
@@ -80,7 +82,16 @@ def get_zags_rpg_organizer():
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="Просмотреть созданные семьи", callback_data="show_families")
     keyboard.button(text="Просмотреть усыновления", callback_data="show_sons")
+    keyboard.button(text='Сделать предложение', callback_data='married')
+    keyboard.button(text='Усыновить/удочерить', callback_data='son')
     keyboard.button(text="Главное меню", callback_data="main_menu")
+    keyboard.adjust(1)
+    return keyboard.as_markup()
+
+def get_get_task_keyboard():
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="Создать контракт", callback_data="create_task")
+    keyboard.button(text="Проверить контракт", callback_data="see_task")
     keyboard.adjust(1)
     return keyboard.as_markup()
 
@@ -91,7 +102,8 @@ def get_main_menu_admins_keyboard():
     keyboard.button(text="Подать жалобу", callback_data="complaint")
     keyboard.button(text="Поощрить участника", callback_data="gift")
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
-    keyboard.button(text="Помощь", callback_data="help")
+    keyboard.button(text='ЗАГС', callback_data='zags')
+    keyboard.button(text="Подать иск", callback_data="isk")
     keyboard.adjust(2)
     return keyboard.as_markup()
 
@@ -100,11 +112,13 @@ def get_main_menu_rating_team_keyboard():
     keyboard.button(text="Жалобы", callback_data="view_complaints")
     keyboard.button(text="Участники", callback_data="participants")
     keyboard.button(text="Начисление и штрафы", callback_data="assign_rating")
-    keyboard.button(text="Поощрение", callback_data="bonus")
+    keyboard.button(text="Поощрения", callback_data="gifts")
     keyboard.button(text="Входящие сообщения", callback_data="inbox_messages")
     keyboard.button(text="Отправить жалобу", callback_data="complaint")
+    keyboard.button(text="Магазин", callback_data="shop")
+    keyboard.button(text='ЗАГС', callback_data='zags')
     keyboard.button(text="Рассылка", callback_data="mailing")
-    keyboard.button(text="Помощь", callback_data="help")
+    keyboard.button(text="Получить иски", callback_data="isk")
     keyboard.adjust(2)
     return keyboard.as_markup()
 
@@ -114,7 +128,8 @@ def get_main_menu_media_team_keyboard():
     keyboard.button(text="Сообщить/Обратиться", callback_data="contact")
     keyboard.button(text="Отправить жалобу", callback_data="complaint")
     keyboard.button(text="Поощрить участника", callback_data="gift")
-    keyboard.button(text="Помощь", callback_data="help")
+    keyboard.button(text='ЗАГС', callback_data='zags')
+    keyboard.button(text="Подать иск", callback_data="isk")
     keyboard.adjust(2)
     return keyboard.as_markup()
 
@@ -216,7 +231,6 @@ def get_users_keyboard():
 def get_upload_csv_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text="Рейтинг участников", callback_data="upload_rating_participants")
-    kb.button(text="Рейтинг команд", callback_data="upload_rating_teams")
     kb.button(text="Загрузка участников", callback_data="upload_participants")
     kb.adjust(1)
     return kb.as_markup()
@@ -224,9 +238,7 @@ def get_upload_csv_keyboard():
 def get_export_csv_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text="Рейтинг участников", callback_data="export_rating_participants")
-    kb.button(text="Рейтинг команд", callback_data="export_rating_teams")
     kb.button(text="Участники", callback_data="export_participants")
-    kb.button(text="Выгрузить логи", callback_data="export_logs")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -258,17 +270,11 @@ def get_student_help_keyboard():
     kb.adjust(1)
     return kb.as_markup()
 
-def get_main_menu_keyboard():
-    kb = InlineKeyboardBuilder()
-    kb.button(text='Главное меню', callback_data='main_menu')
-    kb.adjust(1)
-    return kb.as_markup()
-
 def get_student_shop_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text='Товары и услуги', callback_data='products')
     kb.button(text='Мои покупки', callback_data='my_buy')
-    kb.button(text='Задания', callback_data='tasks')
+    kb.button(text='Контракты', callback_data='tasks')
     kb.button(text='Ввести промокод', callback_data='give_promo')
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(2)
@@ -291,7 +297,7 @@ def get_buy_keyboard():
 
 def get_student_tasks_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.button(text='Задания', callback_data='tasks')
+    kb.button(text='Контракты', callback_data='tasks')
     kb.button(text='Назад', callback_data='back_to_main_menu')
     kb.adjust(1)
     return kb.as_markup()
@@ -394,3 +400,17 @@ def get_sonning():
     keyboard.button(text="Не согласиться", callback_data="sons:no")
     keyboard.adjust(2)
     return keyboard.as_markup()
+
+def get_task_acept():
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="Выполнен", callback_data="task:yes")
+    keyboard.button(text="Не выполнен", callback_data="task:no")
+    keyboard.adjust(2)
+    return keyboard.as_markup()
+
+def get_inbox_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Рассмотрено", callback_data="inbox_done")
+    kb.button(text="Отложить", callback_data="inbox_skip")
+    kb.adjust(2)
+    return kb.as_markup()

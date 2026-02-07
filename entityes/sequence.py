@@ -49,6 +49,7 @@ class Mailing(StatesGroup):
     waiting_for_mailing_text = State()
     waiting_adresat = State()
     waiting_info = State()
+    waiting_files = State()
 
 class RatingCSV(StatesGroup):
     waiting_for_upload_choice = State()
@@ -100,7 +101,24 @@ class Gift(StatesGroup):
     waiting_for_badge_number = State()
     waiting_for_text = State()
     bonus = State()
+    b = State()
+    acept = State()
 
 class Married(StatesGroup):
     waiting_for_second_name = State()
     waiting_second_name = State()
+
+class Task(StatesGroup):
+    waiting_for_text = State()
+    waiting_for_price = State()
+    waiting_for_bonus = State()
+    waiting_for_task_number = State()
+    waiting_task_choice = State()
+    waiting_task_see_number = State()
+    waaiting_task_acept = State()
+
+class Isk(StatesGroup):
+    waiting_for_from = State()
+    waiting_for_adresat = State()
+    waiting_for_text = State()
+    waiting_for_fine = State()

@@ -29,7 +29,8 @@ async def init_db():
             tg_id INTEGER UNIQUE,
             username TEXT,
             fio TEXT,
-            role TEXT NOT NULL DEFAULT 'participant',
+            role TEXT,
+            gender TEXT,
             team_number INTEGER,
             badge_number INTEGER UNIQUE,
             reiting INTEGER NOT NULL DEFAULT 0,
@@ -150,7 +151,7 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            adresat TEXT NOT NULL,
+            adresat TEXT NOT NULL DEFAULT 'ff',
             badge_number INTEGER NOT NULL DEFAULT 0,
             text TEXT,
             status TEXT NOT NULL DEFAULT 'new',
@@ -219,8 +220,8 @@ async def init_db():
             son INTEGER,
             second_name TEXT,
             status TEXT,
-            FOREIGN KEY (first) REFERENCES users(badge_number) ON DELETE CASCADE,
-            FOREIGN KEY (second) REFERENCES users(badge_number) ON DELETE CASCADE
+            FOREIGN KEY (parent) REFERENCES users(badge_number) ON DELETE CASCADE,
+            FOREIGN KEY (son) REFERENCES users(badge_number) ON DELETE CASCADE
         );
         """)
 
@@ -238,10 +239,12 @@ async def init_db():
         await db.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            target_badge INTEGER NOT NULL,
-            points INTEGER NOT NULL,
-            reason TEXT,
-            status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'approved', 'rejected')),
+            creator INTEGER NOT NULL,
+            us INTEGER NOT NULL,
+            price INTEGER,
+            bonus INTEGER, 
+            description TEXT,
+            status TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         """)
@@ -253,6 +256,7 @@ async def init_db():
             promo_id INTEGER,
             FOREIGN KEY (badge_number) REFERENCES users(badge_number),
             FOREIGN KEY (promo_id) REFERENCES promokodes(id)
+            );
         """)
 
         await db.execute("""
@@ -260,8 +264,19 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             badge_number_user INTEGER,
             badge_number_from INTEGER,
-            text INTEGER,
-            status TEXT
+            text TEXT,
+            status TEXT);
+        """)
+
+        await db.execute("""
+        CREATE TABLE IF NOT EXISTS isks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fr TEXT,
+            adresat TEXT,
+            text TEXT,
+            fine TEXT,
+            date TEXT
+            );
         """)
 
         await db.commit()

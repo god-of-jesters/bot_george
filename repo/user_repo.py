@@ -38,11 +38,9 @@ async def add_user(user: User):
         USERS[user.tg_id] = user
 
 async def get_user(tg_id: int) -> User | None:
-    if tg_id in USERS:
-        return USERS[tg_id]
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, gender, date_registered FROM users",
+            "SELECT tg_id, username, fio, team_number, role, badge_number, reiting, balance, gender, date_registered FROM users WHERE tg_id = ?",
             (tg_id,),
         )
         row = await cursor.fetchone()
@@ -260,15 +258,15 @@ async def get_participants_and_room_admins_user_ids(exclude_tg_id: int) -> list[
         rows = await cursor.fetchall()
     return [r[0] for r in rows]
 
-async def update_tg_id(badge_number: int, tg: int, username: str | None = None):
+async def update_tg_id(badge_number: int, tg: int, username: str | None = None, team_number: int = 10):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "UPDATE users SET tg_id=Null WHERE tg_id = ?",
             (tg, )
         )
         cursor = await db.execute(
-            "UPDATE users SET tg_id=?, username=? WHERE badge_number = ?",
-            (tg, username, badge_number,)
+            "UPDATE users SET tg_id=?, username=?, team_number = ? WHERE badge_number = ?",
+            (tg, username, team_number, badge_number)
         )
         await db.commit()
     USERS[tg] = await get_user_by_badge(badge_number)
@@ -288,9 +286,10 @@ async def get_users_by_team(team_number: int):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT * FROM users WHERE team_number = ?",
+            "SELECT tg_id, fio, role, team_number, badge_number, reiting, balance, date_registered FROM users WHERE team_number = ?",
             (team_number,)
         )
+
         rows = await cursor.fetchall()
 
     return [
@@ -306,6 +305,7 @@ async def get_users_by_team(team_number: int):
         )
         for row in rows
     ]
+
 
 async def add_rating(badge_number: int, amount: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -469,9 +469,9 @@ async def get_family_request_by_badge(badge_number: int):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             """
-            SELECT id, badge_number, badge_number_from
+            SELECT id, first, second
             FROM families
-            WHERE badge_number = ?
+            WHERE first = ?
             LIMIT 1
             """,
             (badge_number,),
@@ -479,7 +479,6 @@ async def get_family_request_by_badge(badge_number: int):
         row = await cursor.fetchone()
         await cursor.close()
         return row
-
 
 async def delete_family_by_badge(badge_number: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -529,16 +528,15 @@ async def get_all_families_strings(max_pairs_per_string: int = 20) -> list[str]:
 
     return result
 
-    
 async def add_son(parent: int, son: int, fio: str) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             """
-            INSERT INTO sons VALUES(parent, son, second_name, status)
-            VALUES (?, ?, ?, "new")
-            """, (parent, son, fio)
+            INSERT INTO sons (parent, son, second_name, status)
+            VALUES (?, ?, ?, ?)
+            """, (parent, son, fio, "new")
         )
-        db.commit()
+        await db.commit()
         return cursor.lastrowid
 
 async def get_sons(i: int) -> int:
@@ -549,14 +547,17 @@ async def get_sons(i: int) -> int:
             """, (i, )
         )
         row = await cursor.fetchone()
-        return row[0]
+        if row:
+            return row[0]
+        else:
+            return None
 
 async def del_sons(i: int):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("DELETE FROM sons WHERE id = ?", (i,))
         await db.commit()
 
-async def is_family(db, badge_number: int) -> bool:
+async def is_family(badge_number: int) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             """
@@ -595,7 +596,7 @@ async def set_sons_status(i: int):
             (i, ),
         )
 
-async def get_sons_strings(db, max_pairs_per_string: int = 20) -> list[str]:
+async def get_sons_strings(max_pairs_per_string: int = 20) -> list[str]:
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             """
@@ -633,3 +634,54 @@ async def get_sons_strings(db, max_pairs_per_string: int = 20) -> list[str]:
             result.append(" | ".join(current_pairs))
 
         return result
+
+async def get_spouse_badge(badge_number: int) -> int | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT
+                CASE
+                    WHEN first = ? THEN second
+                    WHEN second = ? THEN first
+                END
+            FROM families
+            WHERE first = ? OR second = ?
+            LIMIT 1
+            """,
+            (badge_number, badge_number, badge_number, badge_number),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+
+        if not row:
+            return None
+
+        return row[0]
+
+async def is_son_pair_exists(parent_badge: int, son_badge: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT 1
+            FROM sons
+            WHERE parent = ? AND son = ?
+            LIMIT 1
+            """,
+            (parent_badge, son_badge),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return row is not None
+    
+async def get_all_active() -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT user_id
+            FROM active
+            """
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+
+        return [row[0] for row in rows]
