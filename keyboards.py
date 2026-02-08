@@ -31,7 +31,7 @@ def get_main_menu_student_keyboard():
     keyboard.button(text="Подать жалобу", callback_data="complaint")
     keyboard.button(text="Мои жалобы", callback_data="my_complaints")
     keyboard.button(text="Развлечения", callback_data="entertainment")
-    keyboard.button(text="Обращение к организаторам", callback_data="message_to_admin")
+    keyboard.button(text="Обращение сотрудникам департамента", callback_data="message_to_admin")
     keyboard.button(text="Подать иск", callback_data="isk")
     keyboard.button(text="Правила", callback_data="help")
     keyboard.adjust(1)
@@ -144,9 +144,9 @@ def get_complaint_keyboard():
 
 def get_complaint_category_keyboard():
     keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="Срочно!", callback_data="alert")
-    keyboard.button(text="В ближайщее время", callback_data="soon")
-    keyboard.adjust(2)
+    keyboard.button(text="Срочный запрос", callback_data="alert")
+    keyboard.button(text="Стандартное время обработки запроса", callback_data="soon")
+    keyboard.adjust(1)
     return keyboard.as_markup()
 
 def get_finish_complaint_keyboard():
