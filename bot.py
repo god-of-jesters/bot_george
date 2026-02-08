@@ -1293,7 +1293,7 @@ async def process_user_new_value(message: Message, state: FSMContext):
             elif int(value) > 10 or int(value) < 1000:
                 user.badge_number = int(value[3:])
             else:
-                await message.answer("Неверный формат ввода. Введите данные в виде 'ком123' или число от 10 до 1000.")
+                await message.answer("Неверный формат ввода. Введите данные в виде число от 10 до 1000")
                 return
         case "reiting":
             if not value.isdigit():
@@ -1341,7 +1341,7 @@ async def process_badge_number(message: Message, state: FSMContext):
                 await message.answer("Такого пользователя нет. Введите id еще раз")
                 return
     else:
-        await message.answer('Неверный формат ввода. Введите данные в виде')
+        await message.answer('Неверный формат ввода. Введите данные в виде число от 10 до 1000')
     registration[user_id].user_id = user_id
     registration[user_id].badge_number = badge_number
 
