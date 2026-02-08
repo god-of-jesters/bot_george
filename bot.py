@@ -1376,12 +1376,20 @@ async def process_fio(message: Message, state: FSMContext):
     except KeyError:
         user = await get_user(user_id)
         active_sessions[user_id] = user
-    await update_tg_id(
-            registration[user_id].badge_number,
-            user_id,
-            message.from_user.username,
-            team_number=registration[user_id].badge_number//100
-    )
+    if registration[user_id].badge_number == 998 or registration[user_id].badge_number == 999:
+        await update_tg_id(
+                registration[user_id].badge_number,
+                user_id,
+                message.from_user.username,
+                10
+        )
+    else:
+        await update_tg_id(
+                registration[user_id].badge_number,
+                user_id,
+                message.from_user.username,
+                team_number=registration[user_id].badge_number//100
+        )
     await message.answer("Авторизация прошла успешно, контур запущен. Получен доступ к следующим модулям Контура")
     await add_active(user_id, active_sessions[user_id].role)
     await show_main_menu(message.bot, user_id, state)

@@ -168,7 +168,7 @@ async def init_db():
 
         await db.execute("""
         CREATE TABLE IF NOT EXISTS ratings (
-            badge_number INTEGER PRIMARY KEY,
+            badge_number UNIQUE,
             full_name TEXT NOT NULL,
             team_id INTEGER,
             daily_base INTEGER NOT NULL DEFAULT 100,

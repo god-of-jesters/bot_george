@@ -15,13 +15,12 @@ async def add():
     #    await db.execute("DROP TABLE users;")
     #    await db.commit()
     await init_db()
-    user1 = User(tg_id=5732277748, fio="Тест 1", team_number=10, role="Участник", gender='М', badge_number=12, reiting=0, balance=0)
+    user1 = User(tg_id=5732277748, fio="Тест 1", team_number=10, role="Участник", gender='М', badge_number=999, reiting=0, balance=0)
     await add_user(user1)
-    user3 = User(tg_id=1438564718, fio="Тест 2", team_number=10, role="Участник", gender='М', badge_number=124, reiting=0, balance=0)
+    user3 = User(tg_id=1438564718, fio="Тест 2", team_number=10, role="Участник", gender='М', badge_number=998, reiting=0, balance=0)
     await add_user(user3)
     user2 = User(tg_id=1438564719, fio="Дмитрий", team_number=10, role="Рейтинг", gender='М', badge_number=99, reiting=0, balance=0)
     await add_user(user2)
-    print("User added")
     team = Team(team_number=1, team_name="VФактор")
     team2 = Team(team_number=2, team_name="ИИдиллия")
     team3 = Team(team_number=3, team_name="С.К.Р.")
@@ -42,7 +41,6 @@ async def add():
     await add_team(team8)
     await add_team(team9)
     await add_team(team10)
-    print("Team added")
 
 async def show_all_users():
     async with aiosqlite.connect(DB_PATH) as db:
@@ -77,12 +75,13 @@ async def get():
 
 async def show_all_thanks():
     async with aiosqlite.connect(DB_PATH) as db:
-        c = await db.execute("SELECT * FROM messages")
+        c = await db.execute("SELECT * FROM ratings")
         r = await c.fetchall()
         print(r)
 
 async def full_ratings():
     users = await get_all_users()
+    print(users[10].fio)
     async with aiosqlite.connect(DB_PATH) as db:
         for user in users:
             if user.role == 'Участник':
@@ -102,4 +101,4 @@ async def drop(name: str):
 #asyncio.run(get())
 #asyncio.run(add())
 #asyncio.run(full_ratings())
-#asyncio.run(show_all_users())
+asyncio.run(show_all_thanks())
