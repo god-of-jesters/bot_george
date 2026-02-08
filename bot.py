@@ -361,7 +361,7 @@ async def process_son_agree(callback_query: CallbackQuery, state: FSMContext):
     a = 'отклонил' if active_sessions[user_id] == 'М' else 'отклонила'
     match data:
         case 'soons:yes':
-            pol = 'сыном' if active_sessions[user_id] == 'М' else 'дочерью'
+            pol = 'сыном' if active_sessions[user_id].gender == 'М' else 'дочерью'
             await callback_query.message.answer(f'Пройдите на стойку регистрации!')
             await show_main_menu(callback_query.bot, user_id, state)
             await callback_query.bot.send_message(parent.tg_id, f'{user.fio} @{user.username} {ac} запрос на {ph} приняли. Пройдите на стойку регистрации')
