@@ -1345,7 +1345,7 @@ async def process_badge_number(message: Message, state: FSMContext):
     registration[user_id].user_id = user_id
     registration[user_id].badge_number = badge_number
 
-    await message.answer("Начать процесс аутентификации. Введите ФИО пользователя")
+    await message.answer("Начат процесс аутентификации. Введите ФИО пользователя")
     await state.set_state(Reg.waiting_for_fio)
 
 @router.message(Reg.waiting_for_fio)
@@ -1358,7 +1358,7 @@ async def process_fio(message: Message, state: FSMContext):
         await state.set_state(Reg.waiting_for_bage_number)
         return
     if message.text.strip() != existing_user.fio:
-        await message.answer("Неправильное ФИО, пользователь с такими данными не найден, введите данные еще раз id")
+        await message.answer("Неправильное ФИО, пользователь с такими данными не найден, введите еще раз id")
         await state.set_state(Reg.waiting_for_bage_number)
         return
     if existing_user.tg_id != user_id:
