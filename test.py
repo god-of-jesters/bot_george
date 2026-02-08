@@ -101,4 +101,4 @@ async def drop(name: str):
 #asyncio.run(get())
 #asyncio.run(add())
 #asyncio.run(full_ratings())
-asyncio.run(show_all_thanks())
+#asyncio.run(show_all_thanks())
