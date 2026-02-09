@@ -15,7 +15,7 @@ async def add():
     #    await db.execute("DROP TABLE users;")
     #    await db.commit()
     await init_db()
-    user1 = User(tg_id=5732277748, fio="Тест 1", team_number=10, role="Участник", gender='М', badge_number=999, reiting=0, balance=0)
+    user1 = User(tg_id=5732277748, fio="Тест 1", team_number=10, role="Участник", gender='Ж', badge_number=999, reiting=0, balance=0)
     await add_user(user1)
     user3 = User(tg_id=1438564718, fio="Тест 2", team_number=10, role="Участник", gender='М', badge_number=998, reiting=0, balance=0)
     await add_user(user3)
@@ -95,6 +95,11 @@ async def drop(name: str):
         await db.execute(f"DROP TABLE IF EXISTS {name}")
         await db.commit()
 
+async def del_pait():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(f"DELETE FROM sons WHERE parent=121 AND son=318")
+        await db.commit()
+
 #asyncio.run(drop("isks"))
 #asyncio.run(drop("sons"))
 #asyncio.run(drop("ratings"))
@@ -102,3 +107,4 @@ async def drop(name: str):
 #asyncio.run(add())
 #asyncio.run(full_ratings())
 #asyncio.run(show_all_thanks())
+asyncio.run(del_pait())

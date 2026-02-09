@@ -685,3 +685,22 @@ async def get_all_active() -> list[int]:
         await cursor.close()
 
         return [row[0] for row in rows]
+
+async def is_pair(user_badge_number: int, adr_badge_number: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT 1
+            FROM sons
+            WHERE (son = ? AND parent = ?)
+               OR (son = ? AND parent = ?)
+            LIMIT 1
+            """,
+            (
+                adr_badge_number, user_badge_number,
+                user_badge_number, adr_badge_number
+            )
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        return row is not None

@@ -90,6 +90,31 @@ MAX_VIDEOS = 1
 ALBUM_FLUSH_DELAY = 0.7
 router = Router()
 
+@router.callback_query(lambda c: c.data in ("sons:yes", "sons:no"))
+async def process_son_agree(callback_query: CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    user = await get_user_by_badge(active_sessions[user_id].badge_number)
+    data = callback_query.data
+    son = await get_sons(user.badge_number)
+    parent = await get_user_by_badge(son)
+    ph = 'удочерение' if active_sessions[user_id] == 'М' else 'усыновление'
+    ac = 'принял' if active_sessions[user_id] == 'М' else 'приняла'
+    a = 'отклонил' if active_sessions[user_id] == 'М' else 'отклонила'
+    match data:
+        case 'sons:yes':
+            pol = 'сыном' if active_sessions[user_id].gender == 'М' else 'дочерью'
+            await callback_query.message.answer(f'Пройдите на стойку регистрации!')
+            await show_main_menu(callback_query.bot, user_id, state)
+            await callback_query.bot.send_message(parent.tg_id, f'{user.fio} @{user.username} {ac} запрос на {ph}. Пройдите на стойку регистрации')
+        case 'sons:no':
+            await callback_query.message.answer(f'Предложение отклонено!')
+            await show_main_menu(callback_query.bot, user_id, state)
+            await del_sons(sonss[user.tg_id])
+            await callback_query.bot.send_message(parent.tg_id, f'{user.fio} @{user.username} {a} запрос на {ph}.')
+        case _:
+            await show_main_menu(callback_query.bot, user_id, state)
+    del sonss[user_id]
+
 @router.callback_query(DecisionCb.filter())
 async def on_decision(call: CallbackQuery, callback_data: DecisionCb):
     req_id = callback_data.req_id
@@ -348,31 +373,6 @@ async def process_alarm_complaint(callback_query: CallbackQuery, state: FSMConte
 
     al[user_id] = com
     await state.set_state(ComplaintReview.stat)
-
-@router.callback_query(lambda c: c.data in ("sons:yes", "sons:no"))
-async def process_son_agree(callback_query: CallbackQuery, state: FSMContext):
-    user_id = callback_query.from_user.id
-    user = await get_user_by_badge(active_sessions[user_id].badge_number)
-    data = callback_query.data
-    son = await get_sons(user.badge_number)
-    parent = await get_user_by_badge(son)
-    ph = 'усыновление' if active_sessions[user_id] == 'М' else 'удочерение'
-    ac = 'принял' if active_sessions[user_id] == 'М' else 'приняла'
-    a = 'отклонил' if active_sessions[user_id] == 'М' else 'отклонила'
-    match data:
-        case 'soons:yes':
-            pol = 'сыном' if active_sessions[user_id].gender == 'М' else 'дочерью'
-            await callback_query.message.answer(f'Пройдите на стойку регистрации!')
-            await show_main_menu(callback_query.bot, user_id, state)
-            await callback_query.bot.send_message(parent.tg_id, f'{user.fio} @{user.username} {ac} запрос на {ph} приняли. Пройдите на стойку регистрации')
-        case 'sons:no':
-            await callback_query.message.answer(f'Предложение отклонено!')
-            await show_main_menu(callback_query.bot, user_id, state)
-            await del_sons(sonss[parent.tg_id])
-            await callback_query.bot.send_message(parent.tg_id, f'{user.fio} @{user.username} {a} запрос на {ph}.')
-        case _:
-            await show_main_menu(callback_query.bot, user_id, state)
-    del sonss[user_id]
 
 @router.message(MainMenu.profile)
 async def main_menu_callback(message: Message, state: FSMContext):
@@ -729,8 +729,8 @@ async def show_main_rating_team(callback_query: CallbackQuery, state: FSMContext
             await state.set_state(Shop.rpg_choice)
 
         case "zags":
-            await callback_query.message.answer("ЗАГС", reply_markup=get_student_zags_keyboard())
-            await state.set_state(ZAGS.waiting_for_choice)
+            await callback_query.message.answer('Главное отделение ЗАГСа', reply_markup=get_zags_rpg_organizer())
+            await state.set_state(ZAGS.rpg_choice)
 
         case "mailing":
             await callback_query.message.answer("Выберете получателей рассылки\n", reply_markup=get_maling_adresat())
@@ -1150,20 +1150,14 @@ async def process_users_callback(callback_query: CallbackQuery, state: FSMContex
             i = 0
             for user in users:
                 if i == 39:
-                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, "
-                    if user.tg_id in act:
-                        mes += 'зарегистрирован\n'
-                    else:
-                        mes += 'Не зарегистрирован\n'
+                    t = 'зарегистрирован\n' if user.tg_id in act else 'не зарегистрирован\n'
+                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, {t}"
                     await callback_query.bot.send_message(chat_id=user_id, text=mes, reply_markup=get_users_keyboard())
                     mes = ''
                     i = 0
                 else:
-                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, "
-                    if user.tg_id in act:
-                        mes += 'зарегистрирован\n'
-                    else:
-                        mes += 'Не зарегистрирован\n'
+                    t = 'зарегистрирован\n' if user.tg_id in act else 'не зарегистрирован\n'
+                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, {t}"
                     i += 1
             await callback_query.message.answer(mes, reply_markup=get_users_keyboard())
         case 'edit_user_data':
@@ -2202,17 +2196,16 @@ async def zags_rpg(callback_query: CallbackQuery, state: FSMContext):
     await state.update_data(choice=data)
     match data:
         case 'show_families':
-            fams = await get_all_families_strings()
-            for i in fams:
-                await callback_query.bot.send_message(user_id, i)
-            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
-        
-        case 'show_sons':
-            sons = await get_sons_strings()
-            for i in sons:
-                await callback_query.bot.send_message(user_id, i)
-            await callback_query.message.answer('Нажмите /start для перехода в главное меню')
+            await callback_query.bot.send_document(
+                chat_id=user_id,
+                document=FSInputFile(await export_families_xlsx())
+            )
 
+        case 'show_sons':
+            await callback_query.bot.send_document(
+                chat_id=user_id,
+                document=FSInputFile(await export_sons_xlsx())
+            )
         case 'married':
             await callback_query.message.answer('Введите номер бейджа кому предложение')
             await state.set_state(ZAGS.waiting_for_badge)
@@ -2263,6 +2256,10 @@ async def process_zags_badge(message: Message, state: FSMContext):
                 await message.answer('Выбранного вами человека уже удочерили или усыновили')
                 await show_main_menu(message.bot, user_id, state)
                 return
+            if await is_pair(user.badge_number, adr.badge_number):
+                await message.answer('Вы уже являетесь отцом или сыном этого человека')
+                await show_main_menu(message.bot, user_id, state)
+                return
             if await get_spouse_badge(active_sessions[user_id].badge_number):
                 await message.answer('Вы не можете усыновить/удочерить своего супруга')
                 await show_main_menu(message.bot, user_id, state)
@@ -2278,15 +2275,15 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
     dat = await state.get_data()
     badge_number = dat.get('badge')
     fam = {
-        'mine': 'взять его',
-        'his': 'взять вашу',
-        'twice': 'взять двойную',
+        'mine': 'взять его фамилию',
+        'his': 'взять вашу фамилию',
+        'twice': 'взять двойную фамилию',
         'as_it': 'остаться при своих фамилиях'
     }
     f = {
-        'mine': 'взять ее',
-        'his': 'взять вашу',
-        'twice': 'двойную',
+        'mine': 'взять ее фамилию',
+        'his': 'взять вашу фамилию',
+        'twice': 'двойную фамилию',
         'as_it': 'остаться при своих фамилиях'
     }
     user = await get_user(user_id)
@@ -2300,16 +2297,20 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
             case 'married':
                 await create_family_request(adr.badge_number, user.badge_number, data)
                 if user.gender == 'М':
-                    await callback_query.bot.send_message(
-                        adr.tg_id,
-                        f"{user.fio} @{user.username} сделал вам предложение. Предлагает {fam[data]} фамилию. Согласена?",
-                        reply_markup=get_family_yes_no_keyboard(),
-                    )
+                    if adr.tg_id in active_sessions:
+                        await callback_query.bot.send_message(
+                            adr.tg_id,
+                            f"{user.fio} @{user.username} сделал вам предложение. Предлагает {fam[data]}. Согласны?",
+                            reply_markup=get_family_yes_no_keyboard(),
+                        )
+                        await callback_query.message.answer("Отправил(а) запрос адресату.")
+                    else:
+                        await callback_query.bot.send_message(user_id, 'Этот пользователь еще не зарегистрирован в боте')
                 else:
                     if adr.tg_id in active_sessions:
                         await callback_query.bot.send_message(
                             adr.tg_id,
-                            f"{user.fio} @{user.username} сделала вам предложение. Предлагает {f[data]} фамилию. Согласен?",
+                            f"{user.fio} @{user.username} сделала вам предложение. Предлагает {f[data]}. Согласны?",
                             reply_markup=get_family_yes_no_keyboard(),
                         )
                         await callback_query.message.answer("Отправил(а) запрос адресату.")
@@ -2853,6 +2854,65 @@ async def export_reiting_choice(callback_query: CallbackQuery, state: FSMContext
 @router.message(RatingCSV.waiting_for_export_choice)
 async def export_reiting_need_choice(message: Message):
     await message.answer("Сначала выбери тип выгрузки.", reply_markup=get_export_csv_keyboard())
+
+async def export_families_xlsx():
+    filename = f"families_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    path = os.path.join("exports", filename)
+
+    os.makedirs("exports", exist_ok=True)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Families"
+
+    ws.append(["Бейдж 1", "Бейдж 2", "Имя 1", "Имя 2", "Статус"])
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT first, second, first_name, second_name, status
+            FROM families
+            ORDER BY id
+            """
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+
+    for row in rows:
+        ws.append(row)
+
+    wb.save(path)
+    return path
+
+
+async def export_sons_xlsx():
+    filename = f"sons_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    path = os.path.join("exports", filename)
+
+    os.makedirs("exports", exist_ok=True)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Sons"
+
+    ws.append(["Отец (бейдж)", "Сын (бейдж)", "Фамилия", "Статус"])
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT parent, son, second_name, status
+            FROM sons
+            ORDER BY id
+            """
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+
+    for row in rows:
+        ws.append(row)
+
+    wb.save(path)
+    return path
 
 async def export_sells_xlsx(bot: Bot, chat_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
