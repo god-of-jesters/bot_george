@@ -5,7 +5,7 @@ from entityes.team import Team
 from entityes.complaint import Complaint
 from entityes.product import Product
 
-DB_PATH = "test.db"
+DB_PATH = "georg.db"
 
 USERS = {}
 FILES = {}
