@@ -2290,8 +2290,12 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
     adr = await get_user_by_badge(badge_number)
     if not adr.tg_id:
         await callback_query.message.answer('Пользователь еще не зарегистрировался в боте, попробуйте снова позже')
+        await show_main_menu(message.bot, user_id, state)
+        return
     if adr.tg_id not in active_sessions:
         await callback_query.message.answer('Пользователь еще не зарегистрировался в боте, попробуйте снова позже')
+        await show_main_menu(message.bot, user_id, state)
+        return
     else:
         match dat.get('choice'):
             case 'married':
@@ -2884,7 +2888,6 @@ async def export_families_xlsx():
     wb.save(path)
     return path
 
-
 async def export_sons_xlsx():
     filename = f"sons_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     path = os.path.join("exports", filename)
@@ -3338,7 +3341,7 @@ async def send_complaint_files(bot: Bot, chat_id: int, complaint_id: int):
 async def notify_all_reiting_team(bot: Bot, complaint: Complaint, state: FSMContext):
     team = await get_raiting_team_tg()
     for member_id in team:
-        if member_id < 1000:
+        if member_id in active_sessions:
             continue
         await bot.send_message(
             member_id,
@@ -3422,7 +3425,7 @@ async def send_complaint_notify_soon(bot: Bot, complaint: Complaint, state: FSMC
     adr = await get_user_by_badge(complaint.adresat)
     target_tg_id = adr.tg_id if adr else None
 
-    if complaint.complaint_id and target_tg_id is not None:
+    if complaint.complaint_id and target_tg_id in active_sessions:
         rows = await get_files_by_complaint_id(complaint.complaint_id)
         for r in rows:
             tg_file_id = r["tg_file_id"]
@@ -3438,7 +3441,7 @@ async def send_complaint_notify_soon(bot: Bot, complaint: Complaint, state: FSMC
     
     if adr.role == 'Участник':
         if fr.role != 'Участник':
-            if target_tg_id is not None:
+            if target_tg_id in active_sessions:
                 await bot.send_message(
                     target_tg_id,
                     "На вас пришла жалоба от организатора.\n"
@@ -3449,7 +3452,7 @@ async def send_complaint_notify_soon(bot: Bot, complaint: Complaint, state: FSMC
                 await subtract_rating(adr.badge_number, fine)
                 await update_execution(complaint.complaint_id, 'done')
         else:
-            if target_tg_id is not None:
+            if target_tg_id in active_sessions:
                 req_id = await create_point_request(
                     target_badge=adr.badge_number,
                     points=fine,
@@ -3466,7 +3469,7 @@ async def send_complaint_notify_soon(bot: Bot, complaint: Complaint, state: FSMC
 
     else:
         if fr.role != 'Участник':
-            if target_tg_id is not None:
+            if target_tg_id in active_sessions:
                 await bot.send_message(
                     target_tg_id,
                     "На вас пришла срочная жалоба от организатора.\n"
@@ -3475,7 +3478,7 @@ async def send_complaint_notify_soon(bot: Bot, complaint: Complaint, state: FSMC
                     f"Описание: {complaint.description}",
                 )
         else:
-            if target_tg_id is not None:
+            if target_tg_id in active_sessions:
                 await bot.send_message(
                     target_tg_id,
                     "На вас пришла срочная жалоба от участника.\n"
