@@ -169,19 +169,30 @@ async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint"
     adr_user = await get_user_by_badge(com.adresat)
     fine = violetion_vines.get(com.violetion, 0)
     if not adr_user:
-        await bot.send_message(reviewer_id, 'Такого человека нет')
-    if decision == "yes":
-        if adr_user.role == "Участник":
+            await bot.send_message(reviewer_id, 'Такого человека нет')
             await subtract_rating(adr_user.badge_number, fine)
-            if adr_user.tg_id in active_sessions:
-                await bot.send_message(
-                    adr_user.tg_id,
-                    f"Жалоба на вас обработана.\n"
-                    f"Время жалобы: {com.date_created}.\n"
-                    f"Описание: {com.description}"
-                )
-            com.execution = "done"
+            return
+    if decision == "yes":
+        if not adr_user:
+            await bot.send_message(reviewer_id, 'Такого человека нет')
+            await subtract_rating(adr_user.badge_number, fine)
+            return
+        if not adr_user.tg_id:
+            await bot.send_message(reviewer_id, 'Такого чата нет')
+            await subtract_rating(adr_user.badge_number, fine)
+            return
+        if adr_user.tg_id in active_sessions:
+            await bot.send_message(
+                adr_user.tg_id,
+                f"Жалоба на вас обработана.\n"
+                f"Время жалобы: {com.date_created}.\n"
+                f"Описание: {com.description}"
+            )
+        com.execution = "done"
     else:
+        if not adr_user.tg_id:
+            await bot.send_message(reviewer_id, 'Такого чата нет')
+            return
         if adr_user.tg_id in active_sessions:
             await bot.send_message(
                 adr_user.tg_id,  
@@ -1341,6 +1352,7 @@ async def process_badge_number(message: Message, state: FSMContext):
                 return
     else:
         await message.answer('Неверный формат ввода. Введите данные в виде число от 10 до 1000')
+        return 
     registration[user_id].user_id = user_id
     registration[user_id].badge_number = badge_number
 
