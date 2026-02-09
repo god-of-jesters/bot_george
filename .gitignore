@@ -4,3 +4,4 @@ test2.py
 server.txt
 test.db
 georg.db
+*.db
