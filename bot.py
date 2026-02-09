@@ -1617,7 +1617,7 @@ async def process_message_answering(message: CallbackQuery, state: FSMContext):
 @router.message(Rating.waiting_for_badge_number)
 async def handle_rating_badge_number(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    badge_number = message.text
+    badge_number = message.text.strip()
     if not badge_number.isdigit():
         await message.answer('Введите корректный бейдж')
         return
@@ -1627,7 +1627,7 @@ async def handle_rating_badge_number(message: Message, state: FSMContext):
         return
     await message.answer('Выберете действие', reply_markup=get_rating_choice_keyboard())
     await state.set_state(Rating.waiting_for_choice)
-    await state.update_data(badge_number=badge_number)
+    await state.update_data(badge_number=int(badge_number))
 
 @router.callback_query(Rating.waiting_for_choice)
 async def handle_rating_choice(callback: CallbackQuery, state: FSMContext):
@@ -1645,7 +1645,7 @@ async def handle_rating_choice(callback: CallbackQuery, state: FSMContext):
 @router.message(Rating.waiting_for_amount)
 async def handle_rating_amount(message: Message, state: FSMContext):
     user_id = message.from_user.id
-    amount = message.text
+    amount = message.text.strip()
     data = await state.get_data()
     badge_number = data.get('badge_number')
     if not amount.isdigit():
@@ -3521,12 +3521,14 @@ async def notify_user_reiting(bot: Bot, choice: str, badge_number: int, amount: 
     user = await get_user_by_badge(badge_number)
     if user.tg_id:
         if user.tg_id in active_sessions:
-            match choice:
-                case 'add':
-                    await bot.send_message(user.tg_id, f'Вам начислили {amount} единц рейтинга')
-                case 'subtract':
-                    await bot.send_message(user.tg_id, f'С вас было снято {amount} единц рейтинга')
-
+            try:
+                match choice:
+                    case 'add':
+                        await bot.send_message(user.tg_id, f'Вам начислили {amount} единц рейтинга')
+                    case 'subtract':
+                        await bot.send_message(user.tg_id, f'С вас было снято {amount} единц рейтинга')
+            except Exception:
+                pass
 async def notify_rpg_buy(bot: Bot, user: User, product: Product):
     rpg_users = await get_rpg_users()
 
