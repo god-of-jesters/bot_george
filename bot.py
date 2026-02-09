@@ -1151,15 +1151,15 @@ async def process_users_callback(callback_query: CallbackQuery, state: FSMContex
             for user in users:
                 if i == 39:
                     mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, "
-                    if user.tg_id in act:
-                        mes += 'Зарегестрирован\n'
-                    else:
-                        mes += 'Не зарегестрирован\n'
                     await callback_query.bot.send_message(chat_id=user_id, text=mes, reply_markup=get_users_keyboard())
                     mes = ''
                     i = 0
                 else:
                     mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}\n"
+                    if user.tg_id in act:
+                        mes += 'зарегистрирован\n'
+                    else:
+                        mes += 'Не зарегистрирован\n'
                     i += 1
             await callback_query.message.answer(mes, reply_markup=get_users_keyboard())
         case 'edit_user_data':
@@ -2288,9 +2288,9 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
     user = await get_user(user_id)
     adr = await get_user_by_badge(badge_number)
     if not adr.tg_id:
-        await callback_query.message.answer('Пользователь еще не зарегестрировался в боте, попробуйте снова позже')
+        await callback_query.message.answer('Пользователь еще не зарегистрировался в боте, попробуйте снова позже')
     if adr.tg_id not in active_sessions:
-        await callback_query.message.answer('Пользователь еще не зарегестрировался в боте, попробуйте снова позже')
+        await callback_query.message.answer('Пользователь еще не зарегистрировался в боте, попробуйте снова позже')
     else:
         match dat.get('choice'):
             case 'married':
@@ -2310,7 +2310,7 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
                         )
                         await callback_query.message.answer("Отправил(а) запрос адресату.")
                     else:
-                        await callback_query.bot.send_message(user_id, 'Этот пользователь еще не зарегестрирован в боте')
+                        await callback_query.bot.send_message(user_id, 'Этот пользователь еще не зарегистрирован в боте')
                 await show_main_menu(callback_query.bot, user_id, state)
             
             case 'son':
@@ -2322,7 +2322,7 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
                         await callback_query.bot.send_message(adr.tg_id, f'Вас хочет удочерить {active_sessions[user_id].fio} @{active_sessions[user_id].username}', reply_markup=get_sonning())
                     await callback_query.message.answer('Предложение отправлено')
                 else:
-                    await callback_query.bot.send_message(user_id, 'Этот пользователь еще не зарегестрирован в боте')
+                    await callback_query.bot.send_message(user_id, 'Этот пользователь еще не зарегистрирован в боте')
                 await show_main_menu(callback_query.bot, user_id, state)
 
 """GIFTS"""

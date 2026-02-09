@@ -97,7 +97,7 @@ def get_get_task_keyboard():
 
 def get_main_menu_admins_keyboard():
     keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="Комантные обращения", callback_data="manage_rooms")
+    keyboard.button(text="Команатные обращения", callback_data="manage_rooms")
     keyboard.button(text="Рассылка", callback_data="mailing")
     keyboard.button(text="Подать жалобу", callback_data="complaint")
     keyboard.button(text="Поощрить участника", callback_data="gift")
