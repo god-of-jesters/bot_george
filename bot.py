@@ -1151,11 +1151,15 @@ async def process_users_callback(callback_query: CallbackQuery, state: FSMContex
             for user in users:
                 if i == 39:
                     mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, "
+                    if user.tg_id in act:
+                        mes += 'зарегистрирован\n'
+                    else:
+                        mes += 'Не зарегистрирован\n'
                     await callback_query.bot.send_message(chat_id=user_id, text=mes, reply_markup=get_users_keyboard())
                     mes = ''
                     i = 0
                 else:
-                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}\n"
+                    mes += f"Бейдж: {user.badge_number}, ФИО: {user.fio}, Роль: {user.role}, "
                     if user.tg_id in act:
                         mes += 'зарегистрирован\n'
                     else:
