@@ -310,13 +310,11 @@ async def get_users_by_team(team_number: int):
 
 async def add_rating(badge_number: int, amount: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("UPDATE ratings SET total_points = total_points + ? WHERE badge_number = ?;", (amount, badge_number))
         cursor = await db.execute("UPDATE ratings SET bonuses_sum = bonuses_sum + ? WHERE badge_number = ?;", (amount, badge_number))
         await db.commit()
 
 async def subtract_rating(badge_number: int, amount: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("UPDATE ratings SET total_points = total_points - ? WHERE badge_number = ?;", (amount, badge_number))
         cursor = await db.execute("UPDATE ratings SET penalties_sum = penalties_sum + ? WHERE badge_number = ?;", (amount, badge_number))
         await db.commit()
 
