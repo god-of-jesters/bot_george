@@ -1,7 +1,25 @@
 .env
+
+# local junk
+server.txt
+nohup.out
+
+# tests
 test.py
 test2.py
-server.txt
-test.db
+
+# databases
 georg.db
+test.db
 *.db
+
+# venv
+.venv/
+venv/
+
+# python cache
+__pycache__/
+*.pyc
+
+# exports
+exports/
