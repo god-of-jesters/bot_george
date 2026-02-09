@@ -862,15 +862,15 @@ async def finish_complaint_cb(callback: CallbackQuery, state: FSMContext):
 
     if complaint.status == "alert":
         if user.role != 'Участник':
-            await send_complaint_notify(message.bot, complaint, state)
+            await send_complaint_notify(callback.bot, complaint, state)
         else:
-            await notify_all_reiting_team(message.bot, complaint, state)
+            await notify_all_reiting_team(callback.bot, complaint, state)
     if complaint.status == 'soon':
         await send_complaint_notify_soon(callback.bot, complaint)
     if complaint.status == 'room_problems':
-        await send_complaint_room_problems(message.bot, complaint)
+        await send_complaint_room_problems(callback.bot, complaint)
     if complaint.status == 'other':
-        await send_complaint_room_problems(message.bot, complaint)
+        await send_complaint_room_problems(callback.bot, complaint)
 
     if user_id in complaintes:
         del complaintes[user_id]
@@ -2303,11 +2303,11 @@ async def process_(callback_query: CallbackQuery, state: FSMContext):
     adr = await get_user_by_badge(badge_number)
     if not adr.tg_id:
         await callback_query.message.answer('Пользователь еще не зарегистрировался в боте, попробуйте снова позже')
-        await show_main_menu(message.bot, user_id, state)
+        await show_main_menu(callback_query.bot, user_id, state)
         return
     if adr.tg_id not in active_sessions:
         await callback_query.message.answer('Пользователь еще не зарегистрировался в боте, попробуйте снова позже')
-        await show_main_menu(message.bot, user_id, state)
+        await show_main_menu(callback_query.bot, user_id, state)
         return
     else:
         match dat.get('choice'):
