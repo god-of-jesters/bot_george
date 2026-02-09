@@ -188,6 +188,7 @@ async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint"
                 f"Время жалобы: {com.date_created}.\n"
                 f"Описание: {com.description}"
             )
+            await subtract_rating(adr_user.badge_number, fine)
         com.execution = "done"
     else:
         if not adr_user.tg_id:
@@ -408,6 +409,21 @@ async def main_menu_callback(message: Message, state: FSMContext):
             case "Медиа":
                 await message.answer("Главное меню", reply_markup=get_main_menu_media_team_keyboard())
                 await state.set_state(MainMenu.main_menu_media)
+
+@router.message(Command("db"))
+async def cmd_db(message: Message):
+    user_id = message.from_user.id
+
+    session = active_sessions.get(user_id)
+    if not session or session.badge_number != 99:
+        return
+
+    db_path = DB_PATH  # путь к georg.db
+
+    await message.answer_document(
+        document=FSInputFile(db_path),
+        caption="Бэкап базы данных"
+    )
 
 @router.message(Command("teg"))
 async def cmd_teg(message: Message):
@@ -1826,7 +1842,7 @@ async def process_bonus_amount(message: Message, state: FSMContext):
                 return
             for u in users:
                 if u.badge_number is not None:
-                    await add_rating(u.badge_number, amount)
+                    await add_bonus(u.badge_number, amount)
             await message.answer(f"Начислил бонус {amount} всем участникам")
 
         case _:
@@ -2433,7 +2449,7 @@ async def gift_bonus_input(message: Message, state: FSMContext):
         await show_main_menu(message.bot, user_id, state)
         return
 
-    await add_rating(badge_user, amount)
+    await add_bonus(badge_user, amount)
     await set_gift_status(thanks_id, "done")
 
     await message.answer(f"Начислено {amount} бонусов. Заявка #{thanks_id} закрыта.")
