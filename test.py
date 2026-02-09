@@ -107,4 +107,4 @@ async def del_pait():
 #asyncio.run(add())
 #asyncio.run(full_ratings())
 #asyncio.run(show_all_thanks())
-asyncio.run(del_pait())
+#asyncio.run(del_pait())
