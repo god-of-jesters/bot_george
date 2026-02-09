@@ -168,11 +168,12 @@ async def on_decision(call: CallbackQuery, callback_data: DecisionCb):
 async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint", decision: str):
     adr_user = await get_user_by_badge(com.adresat)
     fine = violetion_vines.get(com.violetion, 0)
-
+    if not adr_user:
+        await bot.send_message(reviewer_id, 'Такого человека нет')
     if decision == "yes":
-        if adr_user and adr_user.role == "Участник":
+        if adr_user.role == "Участник":
             await subtract_rating(adr_user.badge_number, fine)
-            if adr_user.tg_id is not None:
+            if adr_user.tg_id in active_sessions:
                 await bot.send_message(
                     adr_user.tg_id,
                     f"Жалоба на вас обработана.\n"
@@ -181,7 +182,7 @@ async def _apply_complaint_decision(bot: Bot, reviewer_id: int, com: "Complaint"
                 )
             com.execution = "done"
     else:
-        if adr_user and adr_user.tg_id is not None:
+        if adr_user.tg_id in active_sessions:
             await bot.send_message(
                 adr_user.tg_id,  
                 "На вас была подана жалоба. Отдель справедливости посчитала, что жалоба недействительна"
