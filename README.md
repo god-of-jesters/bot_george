@@ -1,1 +1,1 @@
-﻿# FREE FOR DEV (branch2 v3)
+# FREE FOR DEV (branch2 v3 + merged branch1 v3)
