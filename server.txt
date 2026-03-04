@@ -3,4 +3,4 @@ journalctl -u telegram-bot -f
 git pull
 source .venv/bin/activate
 pip install -r requirements.txt
-sudo systemctl restart telegram-bot
+sudo systemctl restart telegram-bot# Commit 3 change
